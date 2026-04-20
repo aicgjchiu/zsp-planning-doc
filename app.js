@@ -183,15 +183,26 @@
   function renderSystems(){
     const host = qs('#systems-table tbody');
     if(!host) return;
-    host.innerHTML = window.SYSTEMS.map(s=>`
+    const canEdit = !!userName;
+    const rows = systemsState
+      .filter(s => !s.Hidden)
+      .slice()
+      .sort((a,b) => a.SortOrder - b.SortOrder);
+    host.innerHTML = rows.map(s => `
       <tr>
-        <td><b>${s.sys}</b></td>
-        <td>${s.status==='In code' ? '<span class="chip done">In code</span>' : '<span class="chip">'+s.status+'</span>'}</td>
-        <td class="dim">${s.dep}</td>
-        <td>${s.owner}</td>
-        <td>${s.notes}</td>
+        <td><b>${escapeHtml(s.System)}</b></td>
+        <td>${s.SysStatus==='In code' ? '<span class="chip done">In code</span>' : '<span class="chip">'+escapeHtml(s.SysStatus)+'</span>'}</td>
+        <td class="dim">${escapeHtml(s.Dep)}</td>
+        <td>${escapeHtml(s.Owner)}</td>
+        <td>${escapeHtml(s.Notes)} <button class="row-menu-btn" data-sys-id="${escapeAttr(s.Id)}" ${canEdit?'':'disabled title="Set your name first"'}>⋯</button></td>
       </tr>
     `).join('');
+    qsa('.row-menu-btn', host).forEach(btn => {
+      btn.addEventListener('click', () => {
+        if(btn.disabled) return;
+        openSystemModal(btn.getAttribute('data-sys-id'));
+      });
+    });
   }
 
   // --- Task Board · Google Sheets backed ---
@@ -1058,6 +1069,75 @@
     });
   }
 
+  function openSystemModal(id){
+    const isNew = !id;
+    const s = isNew
+      ? { Id:'', System:'', SysStatus:'Design', Dep:'', Owner:'', Notes:'', Hidden:false, SortOrder:0 }
+      : systemsState.find(x => x.Id === id);
+    if(!s){ alert('System not found.'); return; }
+
+    const statusOpts = SYS_STATUSES.map(o => `<option value="${o.v}" ${s.SysStatus===o.v?'selected':''}>${escapeHtml(o.label)}</option>`).join('');
+
+    const html = `
+      <div class="modal-panel" data-panel>
+        <h3>${isNew?'Add System':'Edit System'}</h3>
+        <label>System<input type="text" data-f="System" value="${escapeAttr(s.System)}" placeholder="e.g. GAS, Inventory, Quest System"></label>
+        <div class="modal-row">
+          <label>Status<select data-f="SysStatus">${statusOpts}</select></label>
+          <label>Owner<input type="text" data-f="Owner" value="${escapeAttr(s.Owner)}" placeholder="e.g. Jeff, Jeff + Shared"></label>
+        </div>
+        <label>Depends on<textarea data-f="Dep" placeholder="e.g. Core Loop, GAS">${escapeHtml(s.Dep)}</textarea></label>
+        <label>Notes<textarea data-f="Notes">${escapeHtml(s.Notes)}</textarea></label>
+        <div class="modal-footer">
+          ${isNew ? '' : '<button class="modal-btn danger" data-action="delete">Delete</button>'}
+          <div class="right">
+            <button class="modal-btn" data-action="cancel">Cancel</button>
+            <button class="modal-btn primary" data-action="save">${isNew?'Create':'Save'}</button>
+          </div>
+        </div>
+      </div>
+    `;
+    openModal(html, (root) => {
+      const panel = qs('[data-panel]', root);
+      qs('[data-action="cancel"]', panel).addEventListener('click', closeModal);
+      qs('[data-action="save"]', panel).addEventListener('click', async () => {
+        const fields = {};
+        qsa('[data-f]', panel).forEach(el => { fields[el.getAttribute('data-f')] = el.value; });
+        if(!fields.System || !String(fields.System).trim()){
+          alert('System name is required.');
+          return;
+        }
+        const key = isNew ? genId('sys') : s.Id;
+        if(isNew){
+          const maxSo = systemsState.reduce((m,x) => Math.max(m, x.SortOrder), 0);
+          fields.SortOrder = maxSo + 1000;
+          fields.Hidden = false;
+        }
+        closeModal();
+        await pushRow('Systems', key, fields);
+        fetchAll();
+      });
+      if(!isNew){
+        qs('[data-action="delete"]', panel).addEventListener('click', () => {
+          const footer = qs('.modal-footer', panel);
+          footer.innerHTML = `
+            <div class="modal-confirm-inline">
+              Hide this system? Recoverable from the sheet.
+              <button class="modal-btn danger" data-action="confirm-delete">Yes, hide</button>
+              <button class="modal-btn" data-action="cancel-delete">No</button>
+            </div>
+          `;
+          qs('[data-action="cancel-delete"]', footer).addEventListener('click', closeModal);
+          qs('[data-action="confirm-delete"]', footer).addEventListener('click', async () => {
+            closeModal();
+            await pushRow('Systems', s.Id, { Hidden: true });
+            fetchAll();
+          });
+        });
+      }
+    });
+  }
+
   function openCharacterModal(id){ alert('Character editor coming in Stage C.'); }
   function openMapModal(id){ alert('Map editor coming in Stage B.'); }
   function openItemModal(id){
@@ -1134,5 +1214,4 @@
       }
     });
   }
-  // openSystemModal is implemented in Task 9 (next).
 })();
