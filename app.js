@@ -583,6 +583,34 @@
     setInterval(updateSyncPill, 1000);
   }
 
-  function openEditModal(taskId, preMemberId){ console.log('openEditModal stub', taskId, preMemberId); }
-  function openTeamModal(){ console.log('openTeamModal stub'); }
+  function closeModal(){
+    const root = qs('#modal-root');
+    if(!root) return;
+    root.innerHTML = '';
+    root.classList.remove('open');
+    document.removeEventListener('keydown', modalKeyHandler);
+  }
+  function modalKeyHandler(e){ if(e.key === 'Escape') closeModal(); }
+  function openModal(panelHtml, onMount){
+    const root = qs('#modal-root');
+    if(!root) return;
+    root.innerHTML = `<div class="modal-overlay" data-overlay>${panelHtml}</div>`;
+    root.classList.add('open');
+    document.addEventListener('keydown', modalKeyHandler);
+    const overlay = qs('[data-overlay]', root);
+    overlay.addEventListener('click', (e) => { if(e.target === overlay) closeModal(); });
+    if(typeof onMount === 'function') onMount(root);
+  }
+
+  // Real implementations come in later tasks — keep stubs functional so wiring works
+  function openEditModal(taskId, preMemberId){
+    openModal(`<div class="modal-panel"><h3>Edit Task</h3><p>Not yet implemented (task ${taskId || 'new'}, member ${preMemberId || '-'}).</p><div class="modal-footer"><div class="right"><button class="modal-btn" data-close>Close</button></div></div></div>`, (root) => {
+      qs('[data-close]', root).addEventListener('click', closeModal);
+    });
+  }
+  function openTeamModal(){
+    openModal(`<div class="modal-panel"><h3>Manage Team</h3><p>Not yet implemented.</p><div class="modal-footer"><div class="right"><button class="modal-btn" data-close>Close</button></div></div></div>`, (root) => {
+      qs('[data-close]', root).addEventListener('click', closeModal);
+    });
+  }
 })();
