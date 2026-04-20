@@ -602,6 +602,7 @@
 
   function renderBoard(){
     renderLegend();
+    mountSectionAddButtons();
     const host = qs('#board');
     if(!host) return;
     const activeTeam = teamState.filter(m => m.Active).slice().sort((a,b) => a.Order - b.Order);
@@ -748,6 +749,7 @@
     renderItems();
     renderMaps();
     renderSystems();
+    mountSectionAddButtons();
     renderBoard();
     renderLegend();
 
@@ -1023,4 +1025,25 @@
     root.classList.add('open');
     document.addEventListener('keydown', modalKeyHandler);
   }
+
+  function mountSectionAddButtons(){
+    const canEdit = !!userName;
+    const mounts = [
+      { id:'add-character-btn', label:'＋ Character', onClick:() => openCharacterModal(null) },
+      { id:'add-item-btn',      label:'＋ Item',      onClick:() => openItemModal(null) },
+      { id:'add-map-btn',       label:'＋ Map',       onClick:() => openMapModal(null) },
+      { id:'add-system-btn',    label:'＋ System',    onClick:() => openSystemModal(null) },
+    ];
+    mounts.forEach(m => {
+      const host = qs('#' + m.id);
+      if(!host) return;
+      host.innerHTML = `<button ${canEdit?'':'disabled title="Set your name first"'}>${m.label}</button>`;
+      const btn = qs('button', host);
+      if(btn && canEdit) btn.addEventListener('click', m.onClick);
+    });
+  }
+
+  function openCharacterModal(id){ alert('Character editor coming in Stage C.'); }
+  function openMapModal(id){ alert('Map editor coming in Stage B.'); }
+  // openItemModal and openSystemModal are implemented in Task 8 / 9 (next).
 })();
