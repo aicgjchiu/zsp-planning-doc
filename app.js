@@ -273,11 +273,19 @@
       const res = await fetch(SHEET_ENDPOINT, { method:'GET' });
       const json = await res.json();
       if(!json.ok) throw new Error(json.error || 'fetch failed');
-      taskState = (json.tasks || []).map(normalizeTaskRow);
-      teamState = (json.team  || []).map(normalizeTeamRow);
+      taskState       = (json.tasks      || []).map(normalizeTaskRow);
+      teamState       = (json.team       || []).map(normalizeTeamRow);
+      charactersState = (json.characters || []).map(normalizeCharacterRow);
+      itemsState      = (json.items      || []).map(normalizeItemRow);
+      mapsState       = (json.maps       || []).map(normalizeMapRow);
+      systemsState    = (json.systems    || []).map(normalizeSystemRow);
       lastSyncAt = new Date();
       setSyncStatus('ok');
-      if(teamState.length === 0 && taskState.length === 0){
+      const anyEmpty =
+        teamState.length === 0 || taskState.length === 0 ||
+        charactersState.length === 0 || itemsState.length === 0 ||
+        mapsState.length === 0 || systemsState.length === 0;
+      if(anyEmpty){
         await bootstrapIfEmpty();
       }
       renderBoard();
@@ -457,47 +465,127 @@
   }
 
   async function bootstrapIfEmpty(){
-    // Build seed tasks from window.TASKS
-    const seedTasks = [];
-    const src = window.TASKS || {};
-    Object.keys(src).forEach(colKey => {
-      const memberId = LEGACY_COL_TO_MEMBER[colKey];
-      if(!memberId) return;
-      (src[colKey] || []).forEach((t, idx) => {
-        seedTasks.push({
-          TaskId:    legacyTaskId(colKey, t, idx),
-          MemberId:  memberId,
-          Title:     t.title || '',
-          Body:      t.body  || '',
-          Phase:     t.phase || 1,
-          Priority:  t.p     || 'P1',
-          Status:    'todo',
-          Notes:     '',
-          Assignee:  '',
-          Hidden:    false,
-          SortOrder: (idx + 1) * 1000,
-          CreatedAt: '',
-          UpdatedAt: '',
-          UpdatedBy: '',
+    const body = { Action: 'bootstrap' };
+
+    if (taskState.length === 0 || teamState.length === 0) {
+      const seedTasks = [];
+      const src = window.TASKS || {};
+      Object.keys(src).forEach(colKey => {
+        const memberId = LEGACY_COL_TO_MEMBER[colKey];
+        if(!memberId) return;
+        (src[colKey] || []).forEach((t, idx) => {
+          seedTasks.push({
+            TaskId:    legacyTaskId(colKey, t, idx),
+            MemberId:  memberId,
+            Title:     t.title || '',
+            Body:      t.body  || '',
+            Phase:     t.phase || 1,
+            Priority:  t.p     || 'P1',
+            Status:    'todo',
+            Notes:     '',
+            Assignee:  '',
+            Hidden:    false,
+            SortOrder: (idx + 1) * 1000,
+            CreatedAt: '',
+            UpdatedAt: '',
+            UpdatedBy: '',
+          });
         });
       });
-    });
+      if (taskState.length === 0) body.Tasks = seedTasks;
+      if (teamState.length === 0) body.Team  = SEED_TEAM;
+    }
+
+    if (charactersState.length === 0 && Array.isArray(window.CHARACTERS)) {
+      body.Characters = window.CHARACTERS.map((c, idx) => ({
+        Id:            c.id || `char-seed-${idx}`,
+        Name:          c.name || '',
+        Culture:       c.culture || '',
+        RoleText:      c.role || '',
+        Weapon:        c.weapon || '',
+        Status:        c.status || '',
+        StatusChip:    c.statusChip || '',
+        Summary:       c.summary || '',
+        AbilitiesJson: JSON.stringify(Array.isArray(c.abilities) ? c.abilities : []),
+        Hidden:        false,
+        SortOrder:     (idx + 1) * 1000,
+        CreatedAt:     '',
+        UpdatedAt:     '',
+        UpdatedBy:     '',
+      }));
+    }
+
+    if (itemsState.length === 0 && Array.isArray(window.ITEMS)) {
+      body.Items = window.ITEMS.map((it, idx) => ({
+        Id:        it.id || `item-seed-${idx}`,
+        Name:      it.name || '',
+        Kind:      it.kind || '',
+        Effect:    it.effect || '',
+        Stack:     Number(it.stack) || 0,
+        Existing:  !!it.existing,
+        Notes:     it.notes || '',
+        Hidden:    false,
+        SortOrder: (idx + 1) * 1000,
+        CreatedAt: '',
+        UpdatedAt: '',
+        UpdatedBy: '',
+      }));
+    }
+
+    if (mapsState.length === 0 && Array.isArray(window.MAPS)) {
+      body.Maps = window.MAPS.map((m, idx) => ({
+        Id:         m.id || `map-seed-${idx}`,
+        Name:       m.name || '',
+        Theme:      m.theme || '',
+        Size:       m.size || '',
+        Enemies:    m.enemies || '',
+        Boss:       m.boss || '',
+        Difficulty: m.difficulty || 'Run 2',
+        BiomeNotes: m.biomeNotes || '',
+        Hidden:     false,
+        SortOrder:  (idx + 1) * 1000,
+        CreatedAt:  '',
+        UpdatedAt:  '',
+        UpdatedBy:  '',
+      }));
+    }
+
+    if (systemsState.length === 0 && Array.isArray(window.SYSTEMS)) {
+      body.Systems = window.SYSTEMS.map((s, idx) => ({
+        Id:        s.id || `sys-seed-${idx}`,
+        System:    s.sys || '',
+        SysStatus: s.status || 'Design',
+        Dep:       s.dep || '',
+        Owner:     s.owner || '',
+        Notes:     s.notes || '',
+        Hidden:    false,
+        SortOrder: (idx + 1) * 1000,
+        CreatedAt: '',
+        UpdatedAt: '',
+        UpdatedBy: '',
+      }));
+    }
+
+    // If nothing to seed, nothing to do.
+    if (!body.Tasks && !body.Team && !body.Characters && !body.Items && !body.Maps && !body.Systems) return;
 
     try{
       const res = await fetch(SHEET_ENDPOINT, {
         method: 'POST',
         headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-        body: JSON.stringify({ Action:'bootstrap', Tasks: seedTasks, Team: SEED_TEAM }),
+        body: JSON.stringify(body),
       });
       const json = await res.json();
       if(!json.ok) throw new Error(json.error || 'bootstrap failed');
-      if(json.seeded){
-        // Re-fetch so state reflects the seeded rows
-        const r2 = await fetch(SHEET_ENDPOINT, { method:'GET' });
-        const j2 = await r2.json();
-        taskState = (j2.tasks || []).map(normalizeTaskRow);
-        teamState = (j2.team  || []).map(normalizeTeamRow);
-      }
+      // Re-fetch so state reflects seeded rows.
+      const r2 = await fetch(SHEET_ENDPOINT, { method:'GET' });
+      const j2 = await r2.json();
+      taskState       = (j2.tasks      || []).map(normalizeTaskRow);
+      teamState       = (j2.team       || []).map(normalizeTeamRow);
+      charactersState = (j2.characters || []).map(normalizeCharacterRow);
+      itemsState      = (j2.items      || []).map(normalizeItemRow);
+      mapsState       = (j2.maps       || []).map(normalizeMapRow);
+      systemsState    = (j2.systems    || []).map(normalizeSystemRow);
     }catch(err){
       console.warn('[bootstrap] error:', err);
     }
