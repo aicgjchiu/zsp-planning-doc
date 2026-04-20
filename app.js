@@ -89,22 +89,37 @@
   function renderCharacters(){
     const host = qs('#characters');
     if(!host) return;
-    host.innerHTML = window.CHARACTERS.map(c=>{
-      const isReady = c.statusChip.includes('HP');
+    const canEdit = !!userName;
+    const rows = charactersState
+      .filter(c => !c.Hidden)
+      .slice()
+      .sort((a,b) => a.SortOrder - b.SortOrder);
+    host.innerHTML = rows.map(c => {
+      const isReady = (c.StatusChip || '').includes('HP');
       const chip = isReady
-        ? `<span class="chip char dot">${c.statusChip}</span>`
-        : `<span class="chip">${c.statusChip}</span>`;
+        ? `<span class="chip char dot">${escapeHtml(c.StatusChip)}</span>`
+        : `<span class="chip">${escapeHtml(c.StatusChip)}</span>`;
+      const abilitiesRows = (c.abilities || []).map(a => `
+        <tr>
+          <td class="mono" style="font-weight:600">${escapeHtml(a.key || '')}</td>
+          <td><b>${escapeHtml(a.name || '')}</b></td>
+          <td class="dim">${escapeHtml(a.type || '')}</td>
+          <td>${escapeHtml(a.desc || '')}</td>
+          <td><span class="chip ${a.impl==='Implemented'?'done':''}">${escapeHtml(a.impl || '')}</span></td>
+        </tr>
+      `).join('');
       return `
-        <div class="card" style="padding:22px">
+        <div class="card" data-char-id="${escapeAttr(c.Id)}" style="padding:22px">
+          <button class="card-menu-btn" data-char-id="${escapeAttr(c.Id)}" ${canEdit?'':'disabled title="Set your name first"'}>⋯</button>
           <div class="row" style="justify-content:space-between;margin-bottom:8px">
             <div>
-              <div class="label">${c.role}</div>
-              <h3 style="font-size:18px">${c.name}</h3>
-              <div class="small" style="margin-top:2px">${c.culture} · ${c.weapon}</div>
+              <div class="label">${escapeHtml(c.RoleText)}</div>
+              <h3 style="font-size:18px">${escapeHtml(c.Name)}</h3>
+              <div class="small" style="margin-top:2px">${escapeHtml(c.Culture)} · ${escapeHtml(c.Weapon)}</div>
             </div>
             ${chip}
           </div>
-          <p style="margin:10px 0 14px 0;color:var(--ink-2);font-size:13px">${c.summary}</p>
+          <p style="margin:10px 0 14px 0;color:var(--ink-2);font-size:13px">${escapeHtml(c.Summary)}</p>
           <div class="table-wrap" style="border-radius:6px">
             <table class="sheet">
               <thead><tr>
@@ -114,22 +129,18 @@
                 <th>Description</th>
                 <th style="width:110px">Status</th>
               </tr></thead>
-              <tbody>
-                ${c.abilities.map(a=>`
-                  <tr>
-                    <td class="mono" style="font-weight:600">${a.key}</td>
-                    <td><b>${a.name}</b></td>
-                    <td class="dim">${a.type}</td>
-                    <td>${a.desc}</td>
-                    <td><span class="chip ${a.impl==='Implemented'?'done':''}">${a.impl}</span></td>
-                  </tr>
-                `).join('')}
-              </tbody>
+              <tbody>${abilitiesRows}</tbody>
             </table>
           </div>
         </div>
       `;
     }).join('');
+    qsa('.card-menu-btn', host).forEach(btn => {
+      btn.addEventListener('click', () => {
+        if(btn.disabled) return;
+        openCharacterModal(btn.getAttribute('data-char-id'));
+      });
+    });
   }
 
   // --- Render: Items ---
@@ -1150,7 +1161,126 @@
     });
   }
 
-  function openCharacterModal(id){ alert('Character editor coming in Stage C.'); }
+  function openCharacterModal(id){
+    const isNew = !id;
+    const c = isNew
+      ? { Id:'', Name:'', Culture:'', RoleText:'', Weapon:'', Status:'', StatusChip:'', Summary:'', abilities:[], Hidden:false, SortOrder:0 }
+      : charactersState.find(x => x.Id === id);
+    if(!c){ alert('Character not found.'); return; }
+
+    // Ensure exactly 3 ability slots in draft, pre-filled by key
+    const abDraft = ABILITY_KEYS.map((k, i) => {
+      const existing = (c.abilities || []).find(a => a && a.key === k)
+        || (c.abilities || [])[i]
+        || {};
+      return {
+        key:  k,
+        name: existing.name || '',
+        type: existing.type || 'Skill',
+        desc: existing.desc || '',
+        impl: existing.impl || 'Design only',
+      };
+    });
+
+    function abilityRowHtml(row, i){
+      const typeOpts = ABILITY_TYPES.map(o => `<option value="${o.v}" ${row.type===o.v?'selected':''}>${escapeHtml(o.label)}</option>`).join('');
+      const implOpts = ABILITY_IMPLS.map(o => `<option value="${o.v}" ${row.impl===o.v?'selected':''}>${escapeHtml(o.label)}</option>`).join('');
+      return `
+        <tr data-ability-idx="${i}">
+          <td class="key-cell">${escapeHtml(row.key)}</td>
+          <td><input type="text" data-ab="name" value="${escapeAttr(row.name)}"></td>
+          <td><select data-ab="type">${typeOpts}</select></td>
+          <td><textarea data-ab="desc">${escapeHtml(row.desc)}</textarea></td>
+          <td><select data-ab="impl">${implOpts}</select></td>
+        </tr>
+      `;
+    }
+
+    const html = `
+      <div class="modal-panel" data-panel style="max-width:760px">
+        <h3>${isNew?'Add Character':'Edit Character'}</h3>
+        <div class="modal-row">
+          <label>Name<input type="text" data-f="Name" value="${escapeAttr(c.Name)}" placeholder="e.g. Daoshi · 道士"></label>
+          <label>Culture<input type="text" data-f="Culture" value="${escapeAttr(c.Culture)}" placeholder="e.g. Chinese Taoist"></label>
+        </div>
+        <div class="modal-row">
+          <label>Role<input type="text" data-f="RoleText" value="${escapeAttr(c.RoleText)}" placeholder="e.g. Ranged Caster / Area Control"></label>
+          <label>Weapon<input type="text" data-f="Weapon" value="${escapeAttr(c.Weapon)}"></label>
+        </div>
+        <div class="modal-row">
+          <label>Status (long)<input type="text" data-f="Status" value="${escapeAttr(c.Status)}"></label>
+          <label>Status chip (short)<input type="text" data-f="StatusChip" value="${escapeAttr(c.StatusChip)}" placeholder="e.g. asset: HP ready"></label>
+        </div>
+        <label>Summary<textarea data-f="Summary">${escapeHtml(c.Summary)}</textarea></label>
+        <div>
+          <div class="label" style="margin-top:6px">Abilities (Q / R / T — exactly 3 slots)</div>
+          <table class="abilities-subtable" data-abilities>
+            <thead><tr><th>Key</th><th>Name</th><th style="width:90px">Type</th><th>Description</th><th style="width:110px">Impl</th></tr></thead>
+            <tbody>${abDraft.map(abilityRowHtml).join('')}</tbody>
+          </table>
+        </div>
+        <div class="modal-footer">
+          ${isNew ? '' : '<button class="modal-btn danger" data-action="delete">Delete</button>'}
+          <div class="right">
+            <button class="modal-btn" data-action="cancel">Cancel</button>
+            <button class="modal-btn primary" data-action="save">${isNew?'Create':'Save'}</button>
+          </div>
+        </div>
+      </div>
+    `;
+    openModal(html, (root) => {
+      const panel = qs('[data-panel]', root);
+      qs('[data-action="cancel"]', panel).addEventListener('click', closeModal);
+      qs('[data-action="save"]', panel).addEventListener('click', async () => {
+        const fields = {};
+        qsa('[data-f]', panel).forEach(el => { fields[el.getAttribute('data-f')] = el.value; });
+        if(!fields.Name || !String(fields.Name).trim()){
+          alert('Name is required.');
+          return;
+        }
+        // Collect abilities from sub-table
+        const abs = [];
+        qsa('tr[data-ability-idx]', panel).forEach(tr => {
+          const i = Number(tr.getAttribute('data-ability-idx'));
+          abs.push({
+            key:  ABILITY_KEYS[i],
+            name: qs('[data-ab="name"]', tr).value,
+            type: qs('[data-ab="type"]', tr).value,
+            desc: qs('[data-ab="desc"]', tr).value,
+            impl: qs('[data-ab="impl"]', tr).value,
+          });
+        });
+        fields.AbilitiesJson = JSON.stringify(abs);
+        const key = isNew ? genId('char') : c.Id;
+        if(isNew){
+          const maxSo = charactersState.reduce((acc,x) => Math.max(acc, x.SortOrder), 0);
+          fields.SortOrder = maxSo + 1000;
+          fields.Hidden = false;
+        }
+        closeModal();
+        await pushRow('Characters', key, fields);
+        fetchAll();
+      });
+      if(!isNew){
+        qs('[data-action="delete"]', panel).addEventListener('click', () => {
+          const footer = qs('.modal-footer', panel);
+          footer.innerHTML = `
+            <div class="modal-confirm-inline">
+              Hide this character? Recoverable from the sheet.
+              <button class="modal-btn danger" data-action="confirm-delete">Yes, hide</button>
+              <button class="modal-btn" data-action="cancel-delete">No</button>
+            </div>
+          `;
+          qs('[data-action="cancel-delete"]', footer).addEventListener('click', closeModal);
+          qs('[data-action="confirm-delete"]', footer).addEventListener('click', async () => {
+            closeModal();
+            await pushRow('Characters', c.Id, { Hidden: true });
+            fetchAll();
+          });
+        });
+      }
+    });
+  }
   function openMapModal(id){
     const isNew = !id;
     const m = isNew
