@@ -688,8 +688,120 @@
     });
   }
   function openTeamModal(){
-    openModal(`<div class="modal-panel"><h3>Manage Team</h3><p>Not yet implemented.</p><div class="modal-footer"><div class="right"><button class="modal-btn" data-close>Close</button></div></div></div>`, (root) => {
-      qs('[data-close]', root).addEventListener('click', closeModal);
-    });
+    const draft = teamState.map(m => Object.assign({}, m));
+
+    function panelHtml(){
+      const roleOpts = (sel) => ROLE_KEYS.map(r => `<option value="${r.v}" ${sel===r.v?'selected':''}>${escapeHtml(r.label)}</option>`).join('');
+      const rows = draft.slice().sort((a,b)=>a.Order-b.Order).map((m, i) => `
+        <tr data-member-id="${escapeAttr(m.MemberId)}">
+          <td><input type="text" data-f="Name" value="${escapeAttr(m.Name)}"></td>
+          <td><select data-f="RoleKey">${roleOpts(m.RoleKey)}</select></td>
+          <td><input type="text" data-f="RoleLabel" value="${escapeAttr(m.RoleLabel)}"></td>
+          <td class="mono-cell">${m.Order}</td>
+          <td>
+            <button class="modal-btn" data-action="up" ${i===0?'disabled':''}>↑</button>
+            <button class="modal-btn" data-action="down" ${i===draft.length-1?'disabled':''}>↓</button>
+          </td>
+          <td><label style="flex-direction:row;align-items:center;gap:4px"><input type="checkbox" data-f="Active" ${m.Active?'checked':''}> active</label></td>
+        </tr>
+      `).join('');
+      return `
+        <div class="modal-panel" data-panel style="max-width:720px">
+          <h3>Manage Team</h3>
+          <table class="sheet">
+            <thead><tr><th>Name</th><th>Role</th><th>Role label</th><th>Order</th><th style="width:90px">Reorder</th><th style="width:80px">Active</th></tr></thead>
+            <tbody>${rows}</tbody>
+          </table>
+          <div><button class="modal-btn" data-action="add-member">+ Add member</button></div>
+          <div class="modal-footer">
+            <div class="right">
+              <button class="modal-btn" data-action="cancel">Cancel</button>
+              <button class="modal-btn primary" data-action="save">Save</button>
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    function rerender(root){
+      root.innerHTML = `<div class="modal-overlay" data-overlay>${panelHtml()}</div>`;
+      wire(root);
+    }
+
+    function wire(root){
+      const overlay = qs('[data-overlay]', root);
+      overlay.addEventListener('click', (e) => { if(e.target === overlay) closeModal(); });
+      const panel = qs('[data-panel]', root);
+      qsa('tr[data-member-id]', panel).forEach(tr => {
+        const id = tr.getAttribute('data-member-id');
+        const m = draft.find(x => x.MemberId === id);
+        qsa('[data-f]', tr).forEach(el => {
+          el.addEventListener('change', () => {
+            const k = el.getAttribute('data-f');
+            m[k] = (el.type === 'checkbox') ? el.checked : el.value;
+          });
+        });
+        qs('[data-action="up"]', tr).addEventListener('click', () => {
+          const sorted = draft.slice().sort((a,b)=>a.Order-b.Order);
+          const idx = sorted.findIndex(x => x.MemberId === id);
+          if(idx > 0){
+            const a = sorted[idx-1], b = sorted[idx];
+            const t = a.Order; a.Order = b.Order; b.Order = t;
+            rerender(root);
+          }
+        });
+        qs('[data-action="down"]', tr).addEventListener('click', () => {
+          const sorted = draft.slice().sort((a,b)=>a.Order-b.Order);
+          const idx = sorted.findIndex(x => x.MemberId === id);
+          if(idx < sorted.length - 1){
+            const a = sorted[idx], b = sorted[idx+1];
+            const t = a.Order; a.Order = b.Order; b.Order = t;
+            rerender(root);
+          }
+        });
+      });
+      qs('[data-action="add-member"]', panel).addEventListener('click', () => {
+        const maxOrder = draft.reduce((m,x) => Math.max(m, x.Order||0), 0);
+        draft.push({
+          MemberId: genId('mbr'),
+          Name: 'New member',
+          RoleKey: 'programmer',
+          RoleLabel: 'Role',
+          Order: maxOrder + 1,
+          Active: true,
+          _isNew: true,
+        });
+        rerender(root);
+      });
+      qs('[data-action="cancel"]', panel).addEventListener('click', closeModal);
+      qs('[data-action="save"]', panel).addEventListener('click', async () => {
+        const anyActive = draft.some(m => m.Active);
+        if(!anyActive){
+          alert('At least one member must be Active.');
+          return;
+        }
+        closeModal();
+        for(const m of draft){
+          const orig = teamState.find(x => x.MemberId === m.MemberId);
+          const changed = !orig
+            || orig.Name !== m.Name
+            || orig.RoleKey !== m.RoleKey
+            || orig.RoleLabel !== m.RoleLabel
+            || orig.Order !== m.Order
+            || orig.Active !== m.Active;
+          if(changed){
+            await pushRow('Team', m.MemberId, {
+              Name: m.Name, RoleKey: m.RoleKey, RoleLabel: m.RoleLabel, Order: m.Order, Active: m.Active,
+            });
+          }
+        }
+        renderBoard();
+      });
+    }
+
+    const root = qs('#modal-root');
+    rerender(root);
+    root.classList.add('open');
+    document.addEventListener('keydown', modalKeyHandler);
   }
 })();
