@@ -66,7 +66,7 @@ The Gantt is a CSS grid: a fixed 240px label column + 12 quarter columns of 120p
 
 ## Content Conventions
 
-- **Keep Chinese only in proper nouns** — map names (e.g. `Hamlet 靜村`), character names (`Daoshi 道士`), enemy names (`Jiangshi 殭屍`), boss names, ability names. Everything else (system descriptions, task bodies, tooltips, headers) is in English. This mirrors the reference Google Sheet.
+- **Keep Chinese only in proper nouns** — map names (e.g. `NightMarket 夜市`), character names (`Daoshi 道士`), enemy names (`Jiangshi 殭屍`), boss names, ability names. Everything else (system descriptions, task bodies, tooltips, headers) is in English. This mirrors the reference Google Sheet.
 - **Target game content:** 4 maps · 4 characters · 3 abilities each · 10 items. These numbers are baked into the design doc; changing them means updating `window.CHARACTERS` / `window.ITEMS` / `window.MAPS` in lockstep with the Gantt + task board.
 - **6-phase structure** (P1 Vertical Slice → P6 Ship) over 12 quarters / 3 years. Phase colors in CSS are `.phase-1` through `.phase-6` with matching `--c-*` variables.
 - **Team composition is hard-coded at 4:** 1 programmer (you) + 3 artists (character / environment / VFX-rigging). If team changes, multiple files need updating — search for role column keys (`programmer`, `char`, `env`, `vfx`).
