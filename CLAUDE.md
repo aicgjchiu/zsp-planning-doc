@@ -42,11 +42,17 @@ Live-synced task board backed by a Google Sheet via an Apps Script web app. **Th
 
 - **Endpoint:** configured in `app.js` as `SHEET_ENDPOINT` (a Google Apps Script `/exec` URL).
 - **Backing sheet (inspect rows, debug, recover soft-deletes):** https://docs.google.com/spreadsheets/d/1Od7n8hbOO24SIJiyGR7ctfYTkkLdUXLVf06KiUCY0hQ/edit
-- **Two tabs:**
+- **Tabs:**
   - **`Tasks`** headers (row 1, in order): `TaskId | MemberId | Title | Body | Phase | Priority | Status | Notes | Assignee | Hidden | SortOrder | CreatedAt | UpdatedAt | UpdatedBy`
   - **`Team`** headers: `MemberId | Name | RoleKey | RoleLabel | Order | Active`
+  - **`Characters`** headers: `Id | Name | Culture | RoleText | Weapon | Status | StatusChip | Summary | AbilitiesJson | Hidden | SortOrder | CreatedAt | UpdatedAt | UpdatedBy`  — `AbilitiesJson` is a JSON-serialized array of `{key, name, type, desc, impl}`, exactly 3 slots keyed `Q`/`R`/`T`
+  - **`Items`** headers: `Id | Name | Kind | Effect | Stack | Existing | Notes | Hidden | SortOrder | CreatedAt | UpdatedAt | UpdatedBy`
+  - **`Maps`** headers: `Id | Name | Theme | Size | Enemies | Boss | Difficulty | BiomeNotes | Hidden | SortOrder | CreatedAt | UpdatedAt | UpdatedBy`
+  - **`Systems`** headers: `Id | System | SysStatus | Dep | Owner | Notes | Hidden | SortOrder | CreatedAt | UpdatedAt | UpdatedBy`
+  - **`Config`** headers: `Key | Value`. Private — never returned in `GET`. Holds the unlock password at row `Key=password`.
 - **Read:** `GET` returns `{ ok: true, tasks: [...], team: [...] }` — one object per row, keyed by header.
 - **Write:** `POST` with `Content-Type: text/plain;charset=utf-8` and JSON body `{ Tab: "Tasks"|"Team", Key: <TaskId|MemberId>, Fields: { ... }, UpdatedBy: <name> }`. Script appends if key doesn't exist, otherwise updates only the named fields. `UpdatedAt` + `UpdatedBy` stamped automatically.
+- **Key column convention:** each tab's first column is its primary key. The Apps Script `handleUpsert` detects this from the header row — no per-tab branching. New tabs just need a unique-ID first column to work with the envelope.
 - **Bootstrap:** on page load, if both tabs are empty, the client POSTs `{ Action: "bootstrap", Tasks: [...], Team: [...] }`. Script seeds rows atomically inside `LockService.getScriptLock()` and re-checks emptiness inside the critical section, so two simultaneous loads don't double-seed.
 - **Polling + immediate refetch:** `fetchAll()` runs on page load and every 30s thereafter. Every structural write (add/edit/soft-delete, team save, status change) refetches right after the push succeeds so teammate changes show up immediately. Notes textarea stays optimistic-only (debounced; 30s poll reconciles) to avoid clobbering active typing.
 - **Identity:** user's name is prompted on page load (via `DOMContentLoaded` → post-fetch prompt in `fetchAll`) and stored in `localStorage` under `zsp_user_name`. Stamped on every write as `UpdatedBy`. Add/Edit/Delete/Team buttons are disabled until identity is set; status/notes inline edits still work without it.
@@ -121,6 +127,8 @@ Live URL: https://aicgjchiu.github.io/zsp-planning-doc/
 
 - **Change task content:** edit tasks from the Task Board tab UI (click `⋯` on a card) — this is the new source of truth. `window.TASKS` in `data.js` is seed-only and no longer read after first load; edits there have no effect on the live board.
 - **Team composition:** use the Task Board's "Team" button to add / rename / reorder / deactivate members. No code change needed when the team composition shifts.
+- **Change Design Doc content:** edit characters/items/maps/systems via the Design Doc tab UI (click `⋯` on any card or row, `＋` in a section header to add). The sheet is the source of truth. `window.CHARACTERS / ITEMS / MAPS / SYSTEMS` in `data.js` are seed-only, consumed once on first load; edits there have no effect on the live page after migration.
+- **Character abilities:** exactly 3 slots per character, keyed `Q`/`R`/`T`, edited through the Character modal's sub-table. Stored as `JSON.stringify(abilities)` in the `AbilitiesJson` column of the Characters row. If a character ever needs a 4th ability, the schema tolerates it — only the modal UI enforces count-of-3 today.
 - **Add a character / map / item:** append to `window.CHARACTERS` / `window.MAPS` / `window.ITEMS`. Each has a shape defined by how `app.js::renderCharacters` etc. consume them — check the render functions to confirm required fields.
 - **Shift a Gantt bar:** edit `window.GANTT` — `start` and `end` are quarter indices (0 = Y1Q1, 11 = Y3Q4). Keep `color` in sync with the `role` so the bar matches the row.
 - **Add a phase / lane color:** add a CSS variable in `:root`, then a matching `.chip.X` / `.dot.X` / `.gbar.X` rule. Phases use `.phase-1` through `.phase-6` with left-border color on task cards.

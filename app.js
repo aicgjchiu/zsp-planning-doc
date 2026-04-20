@@ -89,22 +89,37 @@
   function renderCharacters(){
     const host = qs('#characters');
     if(!host) return;
-    host.innerHTML = window.CHARACTERS.map(c=>{
-      const isReady = c.statusChip.includes('HP');
+    const canEdit = !!userName;
+    const rows = charactersState
+      .filter(c => !c.Hidden)
+      .slice()
+      .sort((a,b) => a.SortOrder - b.SortOrder);
+    host.innerHTML = rows.map(c => {
+      const isReady = (c.StatusChip || '').includes('HP');
       const chip = isReady
-        ? `<span class="chip char dot">${c.statusChip}</span>`
-        : `<span class="chip">${c.statusChip}</span>`;
+        ? `<span class="chip char dot">${escapeHtml(c.StatusChip)}</span>`
+        : `<span class="chip">${escapeHtml(c.StatusChip)}</span>`;
+      const abilitiesRows = (c.abilities || []).map(a => `
+        <tr>
+          <td class="mono" style="font-weight:600">${escapeHtml(a.key || '')}</td>
+          <td><b>${escapeHtml(a.name || '')}</b></td>
+          <td class="dim">${escapeHtml(a.type || '')}</td>
+          <td>${escapeHtml(a.desc || '')}</td>
+          <td><span class="chip ${a.impl==='Implemented'?'done':''}">${escapeHtml(a.impl || '')}</span></td>
+        </tr>
+      `).join('');
       return `
-        <div class="card" style="padding:22px">
+        <div class="card" data-char-id="${escapeAttr(c.Id)}" style="padding:22px">
+          <button class="card-menu-btn" data-char-id="${escapeAttr(c.Id)}" ${canEdit?'':'disabled title="Set your name first"'}>⋯</button>
           <div class="row" style="justify-content:space-between;margin-bottom:8px">
             <div>
-              <div class="label">${c.role}</div>
-              <h3 style="font-size:18px">${c.name}</h3>
-              <div class="small" style="margin-top:2px">${c.culture} · ${c.weapon}</div>
+              <div class="label">${escapeHtml(c.RoleText)}</div>
+              <h3 style="font-size:18px">${escapeHtml(c.Name)}</h3>
+              <div class="small" style="margin-top:2px">${escapeHtml(c.Culture)} · ${escapeHtml(c.Weapon)}</div>
             </div>
             ${chip}
           </div>
-          <p style="margin:10px 0 14px 0;color:var(--ink-2);font-size:13px">${c.summary}</p>
+          <p style="margin:10px 0 14px 0;color:var(--ink-2);font-size:13px">${escapeHtml(c.Summary)}</p>
           <div class="table-wrap" style="border-radius:6px">
             <table class="sheet">
               <thead><tr>
@@ -114,73 +129,103 @@
                 <th>Description</th>
                 <th style="width:110px">Status</th>
               </tr></thead>
-              <tbody>
-                ${c.abilities.map(a=>`
-                  <tr>
-                    <td class="mono" style="font-weight:600">${a.key}</td>
-                    <td><b>${a.name}</b></td>
-                    <td class="dim">${a.type}</td>
-                    <td>${a.desc}</td>
-                    <td><span class="chip ${a.impl==='Implemented'?'done':''}">${a.impl}</span></td>
-                  </tr>
-                `).join('')}
-              </tbody>
+              <tbody>${abilitiesRows}</tbody>
             </table>
           </div>
         </div>
       `;
     }).join('');
+    qsa('.card-menu-btn', host).forEach(btn => {
+      btn.addEventListener('click', () => {
+        if(btn.disabled) return;
+        openCharacterModal(btn.getAttribute('data-char-id'));
+      });
+    });
   }
 
   // --- Render: Items ---
   function renderItems(){
     const host = qs('#items-table tbody');
     if(!host) return;
-    host.innerHTML = window.ITEMS.map((it,i)=>`
+    const canEdit = !!userName;
+    const rows = itemsState
+      .filter(it => !it.Hidden)
+      .slice()
+      .sort((a,b) => a.SortOrder - b.SortOrder);
+    host.innerHTML = rows.map((it, i) => `
       <tr>
         <td class="mono dim">${String(i+1).padStart(2,'0')}</td>
-        <td><b>${it.name}</b></td>
-        <td>${it.kind}</td>
-        <td>${it.effect}</td>
-        <td class="num">${it.stack}</td>
-        <td>${it.existing ? '<span class="chip done">Implemented</span>' : '<span class="chip">To build</span>'}</td>
-        <td class="dim">${it.notes}</td>
+        <td><b>${escapeHtml(it.Name)}</b></td>
+        <td>${escapeHtml(it.Kind)}</td>
+        <td>${escapeHtml(it.Effect)}</td>
+        <td class="num">${it.Stack}</td>
+        <td>${it.Existing ? '<span class="chip done">Implemented</span>' : '<span class="chip">To build</span>'}</td>
+        <td class="dim">${escapeHtml(it.Notes)} <button class="row-menu-btn" data-item-id="${escapeAttr(it.Id)}" ${canEdit?'':'disabled title="Set your name first"'}>⋯</button></td>
       </tr>
     `).join('');
+    qsa('.row-menu-btn', host).forEach(btn => {
+      btn.addEventListener('click', () => {
+        if(btn.disabled) return;
+        openItemModal(btn.getAttribute('data-item-id'));
+      });
+    });
   }
 
   // --- Render: Maps ---
   function renderMaps(){
     const host = qs('#maps');
     if(!host) return;
-    host.innerHTML = window.MAPS.map((m,i)=>`
-      <div class="card">
-        <div class="label">Map ${String(i+1).padStart(2,'0')} · ${m.difficulty}</div>
-        <h3>${m.name}</h3>
-        <p style="margin:6px 0 12px 0">${m.theme}</p>
+    const canEdit = !!userName;
+    const rows = mapsState
+      .filter(m => !m.Hidden)
+      .slice()
+      .sort((a,b) => a.SortOrder - b.SortOrder);
+    host.innerHTML = rows.map((m, i) => `
+      <div class="card" data-map-id="${escapeAttr(m.Id)}">
+        <button class="card-menu-btn" data-map-id="${escapeAttr(m.Id)}" ${canEdit?'':'disabled title="Set your name first"'}>⋯</button>
+        <div class="label">Map ${String(i+1).padStart(2,'0')} · ${escapeHtml(m.Difficulty)}</div>
+        <h3>${escapeHtml(m.Name)}</h3>
+        <p style="margin:6px 0 12px 0">${escapeHtml(m.Theme)}</p>
         <dl class="kv">
-          <dt>Size</dt><dd class="mono-cell">${m.size}</dd>
-          <dt>Enemies</dt><dd>${m.enemies}</dd>
-          <dt>Boss</dt><dd>${m.boss}</dd>
-          <dt>Layout</dt><dd style="font-size:12.5px;color:var(--ink-2)">${m.biomeNotes}</dd>
+          <dt>Size</dt><dd class="mono-cell">${escapeHtml(m.Size)}</dd>
+          <dt>Enemies</dt><dd>${escapeHtml(m.Enemies)}</dd>
+          <dt>Boss</dt><dd>${escapeHtml(m.Boss)}</dd>
+          <dt>Layout</dt><dd style="font-size:12.5px;color:var(--ink-2)">${escapeHtml(m.BiomeNotes)}</dd>
         </dl>
       </div>
     `).join('');
+    qsa('.card-menu-btn', host).forEach(btn => {
+      btn.addEventListener('click', () => {
+        if(btn.disabled) return;
+        openMapModal(btn.getAttribute('data-map-id'));
+      });
+    });
   }
 
   // --- Render: Systems ---
   function renderSystems(){
     const host = qs('#systems-table tbody');
     if(!host) return;
-    host.innerHTML = window.SYSTEMS.map(s=>`
+    const canEdit = !!userName;
+    const rows = systemsState
+      .filter(s => !s.Hidden)
+      .slice()
+      .sort((a,b) => a.SortOrder - b.SortOrder);
+    host.innerHTML = rows.map(s => `
       <tr>
-        <td><b>${s.sys}</b></td>
-        <td>${s.status==='In code' ? '<span class="chip done">In code</span>' : '<span class="chip">'+s.status+'</span>'}</td>
-        <td class="dim">${s.dep}</td>
-        <td>${s.owner}</td>
-        <td>${s.notes}</td>
+        <td><b>${escapeHtml(s.System)}</b></td>
+        <td>${s.SysStatus==='In code' ? '<span class="chip done">In code</span>' : '<span class="chip">'+escapeHtml(s.SysStatus)+'</span>'}</td>
+        <td class="dim">${escapeHtml(s.Dep)}</td>
+        <td>${escapeHtml(s.Owner)}</td>
+        <td>${escapeHtml(s.Notes)} <button class="row-menu-btn" data-sys-id="${escapeAttr(s.Id)}" ${canEdit?'':'disabled title="Set your name first"'}>⋯</button></td>
       </tr>
     `).join('');
+    qsa('.row-menu-btn', host).forEach(btn => {
+      btn.addEventListener('click', () => {
+        if(btn.disabled) return;
+        openSystemModal(btn.getAttribute('data-sys-id'));
+      });
+    });
   }
 
   // --- Task Board · Google Sheets backed ---
@@ -196,6 +241,28 @@
     { v:'P0', label:'P0 — Must have' },
     { v:'P1', label:'P1 — Should have' },
     { v:'P2', label:'P2 — Nice to have' },
+  ];
+  const ABILITY_KEYS = ['Q', 'R', 'T']; // fixed slot count per design
+  const ABILITY_TYPES = [
+    { v:'Skill',    label:'Skill' },
+    { v:'Ultimate', label:'Ultimate' },
+  ];
+  const ABILITY_IMPLS = [
+    { v:'Implemented', label:'Implemented' },
+    { v:'Partial',     label:'Partial' },
+    { v:'Design only', label:'Design only' },
+  ];
+  const MAP_DIFFICULTIES = [
+    { v:'Tutorial map / Run 1', label:'Tutorial map / Run 1' },
+    { v:'Run 2',                label:'Run 2' },
+    { v:'Run 3',                label:'Run 3' },
+    { v:'Final map / Run 4+',   label:'Final map / Run 4+' },
+  ];
+  const SYS_STATUSES = [
+    { v:'In code',     label:'In code' },
+    { v:'Partial',     label:'Partial' },
+    { v:'Not started', label:'Not started' },
+    { v:'Design',      label:'Design' },
   ];
   const ROLE_KEYS = [
     { v:'programmer', label:'Programmer' },
@@ -217,12 +284,16 @@
   try{ currentPhaseFilter = localStorage.getItem(TAB_FILTER_KEY_CURRENT) || 'all'; }catch(e){}
 
   // Module state
-  let teamState = [];        // array of { MemberId, Name, RoleKey, RoleLabel, Order, Active, ... }
-  let taskState = [];        // array of task objects from sheet
-  let userName = '';         // cached identity
-  let syncStatus = 'idle';
-  let lastSyncAt = null;
-  let pendingWrites = 0;
+  let teamState       = [];        // array of Team objects
+  let taskState       = [];        // array of Task objects
+  let charactersState = [];        // array of Character objects (AbilitiesJson parsed to .abilities)
+  let itemsState      = [];        // array of Item objects
+  let mapsState       = [];        // array of Map objects
+  let systemsState    = [];        // array of System object
+  let userName        = '';        // cached identity
+  let syncStatus      = 'idle';
+  let lastSyncAt      = null;
+  let pendingWrites   = 0;
 
   function genId(prefix){
     return `${prefix}-${Date.now()}-${Math.floor(Math.random()*1e6).toString(36)}`;
@@ -247,14 +318,26 @@
       const res = await fetch(SHEET_ENDPOINT, { method:'GET' });
       const json = await res.json();
       if(!json.ok) throw new Error(json.error || 'fetch failed');
-      taskState = (json.tasks || []).map(normalizeTaskRow);
-      teamState = (json.team  || []).map(normalizeTeamRow);
+      taskState       = (json.tasks      || []).map(normalizeTaskRow);
+      teamState       = (json.team       || []).map(normalizeTeamRow);
+      charactersState = (json.characters || []).map(normalizeCharacterRow);
+      itemsState      = (json.items      || []).map(normalizeItemRow);
+      mapsState       = (json.maps       || []).map(normalizeMapRow);
+      systemsState    = (json.systems    || []).map(normalizeSystemRow);
       lastSyncAt = new Date();
       setSyncStatus('ok');
-      if(teamState.length === 0 && taskState.length === 0){
+      const anyEmpty =
+        teamState.length === 0 || taskState.length === 0 ||
+        charactersState.length === 0 || itemsState.length === 0 ||
+        mapsState.length === 0 || systemsState.length === 0;
+      if(anyEmpty){
         await bootstrapIfEmpty();
       }
       renderBoard();
+      renderCharacters();
+      renderItems();
+      renderMaps();
+      renderSystems();
       if(!userName){
         const n = (prompt('Enter your name — shown on tasks you create or update. You can change it later.') || '').trim();
         if(n){
@@ -286,16 +369,47 @@
       setSyncStatus('ok');
       // Optimistic local update so UI doesn't wait on next poll
       const nowIso = new Date().toISOString();
+      const stamp = { UpdatedAt: nowIso, UpdatedBy: userName || 'anonymous' };
       if(tab === 'Tasks'){
         const i = taskState.findIndex(t => t.TaskId === key);
-        const patch = Object.assign({}, fields, { UpdatedAt: nowIso, UpdatedBy: userName || 'anonymous' });
+        const patch = Object.assign({}, fields, stamp);
         if(i >= 0) taskState[i] = Object.assign({}, taskState[i], patch);
         else taskState.push(Object.assign({ TaskId: key, CreatedAt: nowIso }, patch));
       } else if(tab === 'Team'){
         const i = teamState.findIndex(m => m.MemberId === key);
-        const patch = Object.assign({}, fields, { UpdatedAt: nowIso, UpdatedBy: userName || 'anonymous' });
+        const patch = Object.assign({}, fields, stamp);
         if(i >= 0) teamState[i] = Object.assign({}, teamState[i], patch);
         else teamState.push(Object.assign({ MemberId: key }, patch));
+      } else if(tab === 'Characters'){
+        const i = charactersState.findIndex(c => c.Id === key);
+        // AbilitiesJson → abilities array for renderCharacters
+        let abilities;
+        if (fields.AbilitiesJson !== undefined){
+          try { const p = JSON.parse(fields.AbilitiesJson); abilities = Array.isArray(p) ? p : []; }
+          catch(e){ abilities = []; }
+        } else if (i >= 0){
+          abilities = charactersState[i].abilities;
+        } else {
+          abilities = [];
+        }
+        const patch = Object.assign({}, fields, { abilities }, stamp);
+        if(i >= 0) charactersState[i] = Object.assign({}, charactersState[i], patch);
+        else charactersState.push(Object.assign({ Id: key, CreatedAt: nowIso }, patch));
+      } else if(tab === 'Items'){
+        const i = itemsState.findIndex(x => x.Id === key);
+        const patch = Object.assign({}, fields, stamp);
+        if(i >= 0) itemsState[i] = Object.assign({}, itemsState[i], patch);
+        else itemsState.push(Object.assign({ Id: key, CreatedAt: nowIso }, patch));
+      } else if(tab === 'Maps'){
+        const i = mapsState.findIndex(x => x.Id === key);
+        const patch = Object.assign({}, fields, stamp);
+        if(i >= 0) mapsState[i] = Object.assign({}, mapsState[i], patch);
+        else mapsState.push(Object.assign({ Id: key, CreatedAt: nowIso }, patch));
+      } else if(tab === 'Systems'){
+        const i = systemsState.findIndex(x => x.Id === key);
+        const patch = Object.assign({}, fields, stamp);
+        if(i >= 0) systemsState[i] = Object.assign({}, systemsState[i], patch);
+        else systemsState.push(Object.assign({ Id: key, CreatedAt: nowIso }, patch));
       }
     }catch(err){
       console.warn('[sync] push error:', err);
@@ -335,6 +449,77 @@
       Active:    r.Active !== false && r.Active !== 'FALSE' && r.Active !== 'false',
     };
   }
+  function normalizeCharacterRow(r){
+    let abilities = [];
+    try {
+      const parsed = JSON.parse(r.AbilitiesJson || '[]');
+      if (Array.isArray(parsed)) abilities = parsed;
+    } catch(e) {}
+    return {
+      Id:         String(r.Id || ''),
+      Name:       String(r.Name || ''),
+      Culture:    String(r.Culture || ''),
+      RoleText:   String(r.RoleText || ''),
+      Weapon:     String(r.Weapon || ''),
+      Status:     String(r.Status || ''),
+      StatusChip: String(r.StatusChip || ''),
+      Summary:    String(r.Summary || ''),
+      abilities:  abilities,
+      Hidden:     r.Hidden === true || r.Hidden === 'TRUE' || r.Hidden === 'true',
+      SortOrder:  Number(r.SortOrder) || 0,
+      CreatedAt:  String(r.CreatedAt || ''),
+      UpdatedAt:  String(r.UpdatedAt || ''),
+      UpdatedBy:  String(r.UpdatedBy || ''),
+    };
+  }
+  function normalizeItemRow(r){
+    return {
+      Id:         String(r.Id || ''),
+      Name:       String(r.Name || ''),
+      Kind:       String(r.Kind || ''),
+      Effect:     String(r.Effect || ''),
+      Stack:      Number(r.Stack) || 0,
+      Existing:   r.Existing === true || r.Existing === 'TRUE' || r.Existing === 'true',
+      Notes:      String(r.Notes || ''),
+      Hidden:     r.Hidden === true || r.Hidden === 'TRUE' || r.Hidden === 'true',
+      SortOrder:  Number(r.SortOrder) || 0,
+      CreatedAt:  String(r.CreatedAt || ''),
+      UpdatedAt:  String(r.UpdatedAt || ''),
+      UpdatedBy:  String(r.UpdatedBy || ''),
+    };
+  }
+  function normalizeMapRow(r){
+    return {
+      Id:         String(r.Id || ''),
+      Name:       String(r.Name || ''),
+      Theme:      String(r.Theme || ''),
+      Size:       String(r.Size || ''),
+      Enemies:    String(r.Enemies || ''),
+      Boss:       String(r.Boss || ''),
+      Difficulty: String(r.Difficulty || 'Run 2'),
+      BiomeNotes: String(r.BiomeNotes || ''),
+      Hidden:     r.Hidden === true || r.Hidden === 'TRUE' || r.Hidden === 'true',
+      SortOrder:  Number(r.SortOrder) || 0,
+      CreatedAt:  String(r.CreatedAt || ''),
+      UpdatedAt:  String(r.UpdatedAt || ''),
+      UpdatedBy:  String(r.UpdatedBy || ''),
+    };
+  }
+  function normalizeSystemRow(r){
+    return {
+      Id:         String(r.Id || ''),
+      System:     String(r.System || ''),
+      SysStatus:  String(r.SysStatus || 'Design'),
+      Dep:        String(r.Dep || ''),
+      Owner:      String(r.Owner || ''),
+      Notes:      String(r.Notes || ''),
+      Hidden:     r.Hidden === true || r.Hidden === 'TRUE' || r.Hidden === 'true',
+      SortOrder:  Number(r.SortOrder) || 0,
+      CreatedAt:  String(r.CreatedAt || ''),
+      UpdatedAt:  String(r.UpdatedAt || ''),
+      UpdatedBy:  String(r.UpdatedBy || ''),
+    };
+  }
 
   function setSyncStatus(s){ syncStatus = s; updateSyncPill(); }
   function updateSyncPill(){
@@ -360,47 +545,127 @@
   }
 
   async function bootstrapIfEmpty(){
-    // Build seed tasks from window.TASKS
-    const seedTasks = [];
-    const src = window.TASKS || {};
-    Object.keys(src).forEach(colKey => {
-      const memberId = LEGACY_COL_TO_MEMBER[colKey];
-      if(!memberId) return;
-      (src[colKey] || []).forEach((t, idx) => {
-        seedTasks.push({
-          TaskId:    legacyTaskId(colKey, t, idx),
-          MemberId:  memberId,
-          Title:     t.title || '',
-          Body:      t.body  || '',
-          Phase:     t.phase || 1,
-          Priority:  t.p     || 'P1',
-          Status:    'todo',
-          Notes:     '',
-          Assignee:  '',
-          Hidden:    false,
-          SortOrder: (idx + 1) * 1000,
-          CreatedAt: '',
-          UpdatedAt: '',
-          UpdatedBy: '',
+    const body = { Action: 'bootstrap' };
+
+    if (taskState.length === 0 || teamState.length === 0) {
+      const seedTasks = [];
+      const src = window.TASKS || {};
+      Object.keys(src).forEach(colKey => {
+        const memberId = LEGACY_COL_TO_MEMBER[colKey];
+        if(!memberId) return;
+        (src[colKey] || []).forEach((t, idx) => {
+          seedTasks.push({
+            TaskId:    legacyTaskId(colKey, t, idx),
+            MemberId:  memberId,
+            Title:     t.title || '',
+            Body:      t.body  || '',
+            Phase:     t.phase || 1,
+            Priority:  t.p     || 'P1',
+            Status:    'todo',
+            Notes:     '',
+            Assignee:  '',
+            Hidden:    false,
+            SortOrder: (idx + 1) * 1000,
+            CreatedAt: '',
+            UpdatedAt: '',
+            UpdatedBy: '',
+          });
         });
       });
-    });
+      if (taskState.length === 0) body.Tasks = seedTasks;
+      if (teamState.length === 0) body.Team  = SEED_TEAM;
+    }
+
+    if (charactersState.length === 0 && Array.isArray(window.CHARACTERS)) {
+      body.Characters = window.CHARACTERS.map((c, idx) => ({
+        Id:            c.id || `char-seed-${idx}`,
+        Name:          c.name || '',
+        Culture:       c.culture || '',
+        RoleText:      c.role || '',
+        Weapon:        c.weapon || '',
+        Status:        c.status || '',
+        StatusChip:    c.statusChip || '',
+        Summary:       c.summary || '',
+        AbilitiesJson: JSON.stringify(Array.isArray(c.abilities) ? c.abilities : []),
+        Hidden:        false,
+        SortOrder:     (idx + 1) * 1000,
+        CreatedAt:     '',
+        UpdatedAt:     '',
+        UpdatedBy:     '',
+      }));
+    }
+
+    if (itemsState.length === 0 && Array.isArray(window.ITEMS)) {
+      body.Items = window.ITEMS.map((it, idx) => ({
+        Id:        it.id || `item-seed-${idx}`,
+        Name:      it.name || '',
+        Kind:      it.kind || '',
+        Effect:    it.effect || '',
+        Stack:     Number(it.stack) || 0,
+        Existing:  !!it.existing,
+        Notes:     it.notes || '',
+        Hidden:    false,
+        SortOrder: (idx + 1) * 1000,
+        CreatedAt: '',
+        UpdatedAt: '',
+        UpdatedBy: '',
+      }));
+    }
+
+    if (mapsState.length === 0 && Array.isArray(window.MAPS)) {
+      body.Maps = window.MAPS.map((m, idx) => ({
+        Id:         m.id || `map-seed-${idx}`,
+        Name:       m.name || '',
+        Theme:      m.theme || '',
+        Size:       m.size || '',
+        Enemies:    m.enemies || '',
+        Boss:       m.boss || '',
+        Difficulty: m.difficulty || 'Run 2',
+        BiomeNotes: m.biomeNotes || '',
+        Hidden:     false,
+        SortOrder:  (idx + 1) * 1000,
+        CreatedAt:  '',
+        UpdatedAt:  '',
+        UpdatedBy:  '',
+      }));
+    }
+
+    if (systemsState.length === 0 && Array.isArray(window.SYSTEMS)) {
+      body.Systems = window.SYSTEMS.map((s, idx) => ({
+        Id:        s.id || `sys-seed-${idx}`,
+        System:    s.sys || '',
+        SysStatus: s.status || 'Design',
+        Dep:       s.dep || '',
+        Owner:     s.owner || '',
+        Notes:     s.notes || '',
+        Hidden:    false,
+        SortOrder: (idx + 1) * 1000,
+        CreatedAt: '',
+        UpdatedAt: '',
+        UpdatedBy: '',
+      }));
+    }
+
+    // If nothing to seed, nothing to do.
+    if (!body.Tasks && !body.Team && !body.Characters && !body.Items && !body.Maps && !body.Systems) return;
 
     try{
       const res = await fetch(SHEET_ENDPOINT, {
         method: 'POST',
         headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-        body: JSON.stringify({ Action:'bootstrap', Tasks: seedTasks, Team: SEED_TEAM }),
+        body: JSON.stringify(body),
       });
       const json = await res.json();
       if(!json.ok) throw new Error(json.error || 'bootstrap failed');
-      if(json.seeded){
-        // Re-fetch so state reflects the seeded rows
-        const r2 = await fetch(SHEET_ENDPOINT, { method:'GET' });
-        const j2 = await r2.json();
-        taskState = (j2.tasks || []).map(normalizeTaskRow);
-        teamState = (j2.team  || []).map(normalizeTeamRow);
-      }
+      // Re-fetch so state reflects seeded rows.
+      const r2 = await fetch(SHEET_ENDPOINT, { method:'GET' });
+      const j2 = await r2.json();
+      taskState       = (j2.tasks      || []).map(normalizeTaskRow);
+      teamState       = (j2.team       || []).map(normalizeTeamRow);
+      charactersState = (j2.characters || []).map(normalizeCharacterRow);
+      itemsState      = (j2.items      || []).map(normalizeItemRow);
+      mapsState       = (j2.maps       || []).map(normalizeMapRow);
+      systemsState    = (j2.systems    || []).map(normalizeSystemRow);
     }catch(err){
       console.warn('[bootstrap] error:', err);
     }
@@ -417,6 +682,7 @@
 
   function renderBoard(){
     renderLegend();
+    mountSectionAddButtons();
     const host = qs('#board');
     if(!host) return;
     const activeTeam = teamState.filter(m => m.Active).slice().sort((a,b) => a.Order - b.Order);
@@ -563,6 +829,7 @@
     renderItems();
     renderMaps();
     renderSystems();
+    mountSectionAddButtons();
     renderBoard();
     renderLegend();
 
@@ -837,5 +1104,364 @@
     rerender(root);
     root.classList.add('open');
     document.addEventListener('keydown', modalKeyHandler);
+  }
+
+  function mountSectionAddButtons(){
+    const canEdit = !!userName;
+    const mounts = [
+      { id:'add-character-btn', label:'＋ Character', onClick:() => openCharacterModal(null) },
+      { id:'add-item-btn',      label:'＋ Item',      onClick:() => openItemModal(null) },
+      { id:'add-map-btn',       label:'＋ Map',       onClick:() => openMapModal(null) },
+      { id:'add-system-btn',    label:'＋ System',    onClick:() => openSystemModal(null) },
+    ];
+    mounts.forEach(m => {
+      const host = qs('#' + m.id);
+      if(!host) return;
+      host.innerHTML = `<button ${canEdit?'':'disabled title="Set your name first"'}>${m.label}</button>`;
+      const btn = qs('button', host);
+      if(btn && canEdit) btn.addEventListener('click', m.onClick);
+    });
+  }
+
+  function openSystemModal(id){
+    const isNew = !id;
+    const s = isNew
+      ? { Id:'', System:'', SysStatus:'Design', Dep:'', Owner:'', Notes:'', Hidden:false, SortOrder:0 }
+      : systemsState.find(x => x.Id === id);
+    if(!s){ alert('System not found.'); return; }
+
+    const statusOpts = SYS_STATUSES.map(o => `<option value="${o.v}" ${s.SysStatus===o.v?'selected':''}>${escapeHtml(o.label)}</option>`).join('');
+
+    const html = `
+      <div class="modal-panel" data-panel>
+        <h3>${isNew?'Add System':'Edit System'}</h3>
+        <label>System<input type="text" data-f="System" value="${escapeAttr(s.System)}" placeholder="e.g. GAS, Inventory, Quest System"></label>
+        <div class="modal-row">
+          <label>Status<select data-f="SysStatus">${statusOpts}</select></label>
+          <label>Owner<input type="text" data-f="Owner" value="${escapeAttr(s.Owner)}" placeholder="e.g. Jeff, Jeff + Shared"></label>
+        </div>
+        <label>Depends on<textarea data-f="Dep" placeholder="e.g. Core Loop, GAS">${escapeHtml(s.Dep)}</textarea></label>
+        <label>Notes<textarea data-f="Notes">${escapeHtml(s.Notes)}</textarea></label>
+        <div class="modal-footer">
+          ${isNew ? '' : '<button class="modal-btn danger" data-action="delete">Delete</button>'}
+          <div class="right">
+            <button class="modal-btn" data-action="cancel">Cancel</button>
+            <button class="modal-btn primary" data-action="save">${isNew?'Create':'Save'}</button>
+          </div>
+        </div>
+      </div>
+    `;
+    openModal(html, (root) => {
+      const panel = qs('[data-panel]', root);
+      qs('[data-action="cancel"]', panel).addEventListener('click', closeModal);
+      qs('[data-action="save"]', panel).addEventListener('click', async () => {
+        const fields = {};
+        qsa('[data-f]', panel).forEach(el => { fields[el.getAttribute('data-f')] = el.value; });
+        if(!fields.System || !String(fields.System).trim()){
+          alert('System name is required.');
+          return;
+        }
+        const key = isNew ? genId('sys') : s.Id;
+        if(isNew){
+          const maxSo = systemsState.reduce((m,x) => Math.max(m, x.SortOrder), 0);
+          fields.SortOrder = maxSo + 1000;
+          fields.Hidden = false;
+        }
+        closeModal();
+        await pushRow('Systems', key, fields);
+        renderSystems();
+        fetchAll();
+      });
+      if(!isNew){
+        qs('[data-action="delete"]', panel).addEventListener('click', () => {
+          const footer = qs('.modal-footer', panel);
+          footer.innerHTML = `
+            <div class="modal-confirm-inline">
+              Hide this system? Recoverable from the sheet.
+              <button class="modal-btn danger" data-action="confirm-delete">Yes, hide</button>
+              <button class="modal-btn" data-action="cancel-delete">No</button>
+            </div>
+          `;
+          qs('[data-action="cancel-delete"]', footer).addEventListener('click', closeModal);
+          qs('[data-action="confirm-delete"]', footer).addEventListener('click', async () => {
+            closeModal();
+            await pushRow('Systems', s.Id, { Hidden: true });
+            renderSystems();
+            fetchAll();
+          });
+        });
+      }
+    });
+  }
+
+  function openCharacterModal(id){
+    const isNew = !id;
+    const c = isNew
+      ? { Id:'', Name:'', Culture:'', RoleText:'', Weapon:'', Status:'', StatusChip:'', Summary:'', abilities:[], Hidden:false, SortOrder:0 }
+      : charactersState.find(x => x.Id === id);
+    if(!c){ alert('Character not found.'); return; }
+
+    // Ensure exactly 3 ability slots in draft, pre-filled by key
+    const abDraft = ABILITY_KEYS.map((k, i) => {
+      const existing = (c.abilities || []).find(a => a && a.key === k)
+        || (c.abilities || [])[i]
+        || {};
+      return {
+        key:  k,
+        name: existing.name || '',
+        type: existing.type || 'Skill',
+        desc: existing.desc || '',
+        impl: existing.impl || 'Design only',
+      };
+    });
+
+    function abilityRowHtml(row, i){
+      const typeOpts = ABILITY_TYPES.map(o => `<option value="${o.v}" ${row.type===o.v?'selected':''}>${escapeHtml(o.label)}</option>`).join('');
+      const implOpts = ABILITY_IMPLS.map(o => `<option value="${o.v}" ${row.impl===o.v?'selected':''}>${escapeHtml(o.label)}</option>`).join('');
+      return `
+        <tr data-ability-idx="${i}">
+          <td class="key-cell">${escapeHtml(row.key)}</td>
+          <td><input type="text" data-ab="name" value="${escapeAttr(row.name)}"></td>
+          <td><select data-ab="type">${typeOpts}</select></td>
+          <td><textarea data-ab="desc">${escapeHtml(row.desc)}</textarea></td>
+          <td><select data-ab="impl">${implOpts}</select></td>
+        </tr>
+      `;
+    }
+
+    const html = `
+      <div class="modal-panel" data-panel style="max-width:760px">
+        <h3>${isNew?'Add Character':'Edit Character'}</h3>
+        <div class="modal-row">
+          <label>Name<input type="text" data-f="Name" value="${escapeAttr(c.Name)}" placeholder="e.g. Daoshi · 道士"></label>
+          <label>Culture<input type="text" data-f="Culture" value="${escapeAttr(c.Culture)}" placeholder="e.g. Chinese Taoist"></label>
+        </div>
+        <div class="modal-row">
+          <label>Role<input type="text" data-f="RoleText" value="${escapeAttr(c.RoleText)}" placeholder="e.g. Ranged Caster / Area Control"></label>
+          <label>Weapon<input type="text" data-f="Weapon" value="${escapeAttr(c.Weapon)}"></label>
+        </div>
+        <div class="modal-row">
+          <label>Status (long)<input type="text" data-f="Status" value="${escapeAttr(c.Status)}"></label>
+          <label>Status chip (short)<input type="text" data-f="StatusChip" value="${escapeAttr(c.StatusChip)}" placeholder="e.g. asset: HP ready"></label>
+        </div>
+        <label>Summary<textarea data-f="Summary">${escapeHtml(c.Summary)}</textarea></label>
+        <div>
+          <div class="label" style="margin-top:6px">Abilities (Q / R / T — exactly 3 slots)</div>
+          <table class="abilities-subtable" data-abilities>
+            <thead><tr><th>Key</th><th>Name</th><th style="width:90px">Type</th><th>Description</th><th style="width:110px">Impl</th></tr></thead>
+            <tbody>${abDraft.map(abilityRowHtml).join('')}</tbody>
+          </table>
+        </div>
+        <div class="modal-footer">
+          ${isNew ? '' : '<button class="modal-btn danger" data-action="delete">Delete</button>'}
+          <div class="right">
+            <button class="modal-btn" data-action="cancel">Cancel</button>
+            <button class="modal-btn primary" data-action="save">${isNew?'Create':'Save'}</button>
+          </div>
+        </div>
+      </div>
+    `;
+    openModal(html, (root) => {
+      const panel = qs('[data-panel]', root);
+      qs('[data-action="cancel"]', panel).addEventListener('click', closeModal);
+      qs('[data-action="save"]', panel).addEventListener('click', async () => {
+        const fields = {};
+        qsa('[data-f]', panel).forEach(el => { fields[el.getAttribute('data-f')] = el.value; });
+        if(!fields.Name || !String(fields.Name).trim()){
+          alert('Name is required.');
+          return;
+        }
+        // Collect abilities from sub-table
+        const abs = [];
+        qsa('tr[data-ability-idx]', panel).forEach(tr => {
+          const i = Number(tr.getAttribute('data-ability-idx'));
+          abs.push({
+            key:  ABILITY_KEYS[i],
+            name: qs('[data-ab="name"]', tr).value,
+            type: qs('[data-ab="type"]', tr).value,
+            desc: qs('[data-ab="desc"]', tr).value,
+            impl: qs('[data-ab="impl"]', tr).value,
+          });
+        });
+        fields.AbilitiesJson = JSON.stringify(abs);
+        const key = isNew ? genId('char') : c.Id;
+        if(isNew){
+          const maxSo = charactersState.reduce((acc,x) => Math.max(acc, x.SortOrder), 0);
+          fields.SortOrder = maxSo + 1000;
+          fields.Hidden = false;
+        }
+        closeModal();
+        await pushRow('Characters', key, fields);
+        renderCharacters();
+        fetchAll();
+      });
+      if(!isNew){
+        qs('[data-action="delete"]', panel).addEventListener('click', () => {
+          const footer = qs('.modal-footer', panel);
+          footer.innerHTML = `
+            <div class="modal-confirm-inline">
+              Hide this character? Recoverable from the sheet.
+              <button class="modal-btn danger" data-action="confirm-delete">Yes, hide</button>
+              <button class="modal-btn" data-action="cancel-delete">No</button>
+            </div>
+          `;
+          qs('[data-action="cancel-delete"]', footer).addEventListener('click', closeModal);
+          qs('[data-action="confirm-delete"]', footer).addEventListener('click', async () => {
+            closeModal();
+            await pushRow('Characters', c.Id, { Hidden: true });
+            renderCharacters();
+            fetchAll();
+          });
+        });
+      }
+    });
+  }
+  function openMapModal(id){
+    const isNew = !id;
+    const m = isNew
+      ? { Id:'', Name:'', Theme:'', Size:'', Enemies:'', Boss:'', Difficulty:'Run 2', BiomeNotes:'', Hidden:false, SortOrder:0 }
+      : mapsState.find(x => x.Id === id);
+    if(!m){ alert('Map not found.'); return; }
+
+    const difOpts = MAP_DIFFICULTIES.map(o => `<option value="${o.v}" ${m.Difficulty===o.v?'selected':''}>${escapeHtml(o.label)}</option>`).join('');
+
+    const html = `
+      <div class="modal-panel" data-panel style="max-width:640px">
+        <h3>${isNew?'Add Map':'Edit Map'}</h3>
+        <label>Name<input type="text" data-f="Name" value="${escapeAttr(m.Name)}" placeholder="e.g. NightMarket · 夜市"></label>
+        <div class="modal-row">
+          <label>Size<input type="text" data-f="Size" value="${escapeAttr(m.Size)}" placeholder="e.g. 250m × 250m"></label>
+          <label>Difficulty<select data-f="Difficulty">${difOpts}</select></label>
+        </div>
+        <label>Theme<textarea data-f="Theme">${escapeHtml(m.Theme)}</textarea></label>
+        <label>Enemies<textarea data-f="Enemies">${escapeHtml(m.Enemies)}</textarea></label>
+        <label>Boss<input type="text" data-f="Boss" value="${escapeAttr(m.Boss)}"></label>
+        <label>Biome / Layout notes<textarea data-f="BiomeNotes">${escapeHtml(m.BiomeNotes)}</textarea></label>
+        <div class="modal-footer">
+          ${isNew ? '' : '<button class="modal-btn danger" data-action="delete">Delete</button>'}
+          <div class="right">
+            <button class="modal-btn" data-action="cancel">Cancel</button>
+            <button class="modal-btn primary" data-action="save">${isNew?'Create':'Save'}</button>
+          </div>
+        </div>
+      </div>
+    `;
+    openModal(html, (root) => {
+      const panel = qs('[data-panel]', root);
+      qs('[data-action="cancel"]', panel).addEventListener('click', closeModal);
+      qs('[data-action="save"]', panel).addEventListener('click', async () => {
+        const fields = {};
+        qsa('[data-f]', panel).forEach(el => { fields[el.getAttribute('data-f')] = el.value; });
+        if(!fields.Name || !String(fields.Name).trim()){
+          alert('Name is required.');
+          return;
+        }
+        const key = isNew ? genId('map') : m.Id;
+        if(isNew){
+          const maxSo = mapsState.reduce((acc,x) => Math.max(acc, x.SortOrder), 0);
+          fields.SortOrder = maxSo + 1000;
+          fields.Hidden = false;
+        }
+        closeModal();
+        await pushRow('Maps', key, fields);
+        renderMaps();
+        fetchAll();
+      });
+      if(!isNew){
+        qs('[data-action="delete"]', panel).addEventListener('click', () => {
+          const footer = qs('.modal-footer', panel);
+          footer.innerHTML = `
+            <div class="modal-confirm-inline">
+              Hide this map? Recoverable from the sheet.
+              <button class="modal-btn danger" data-action="confirm-delete">Yes, hide</button>
+              <button class="modal-btn" data-action="cancel-delete">No</button>
+            </div>
+          `;
+          qs('[data-action="cancel-delete"]', footer).addEventListener('click', closeModal);
+          qs('[data-action="confirm-delete"]', footer).addEventListener('click', async () => {
+            closeModal();
+            await pushRow('Maps', m.Id, { Hidden: true });
+            renderMaps();
+            fetchAll();
+          });
+        });
+      }
+    });
+  }
+  function openItemModal(id){
+    const isNew = !id;
+    const it = isNew
+      ? { Id:'', Name:'', Kind:'', Effect:'', Stack:1, Existing:false, Notes:'', Hidden:false, SortOrder:0 }
+      : itemsState.find(x => x.Id === id);
+    if(!it){ alert('Item not found.'); return; }
+
+    const html = `
+      <div class="modal-panel" data-panel>
+        <h3>${isNew?'Add Item':'Edit Item'}</h3>
+        <label>Name<input type="text" data-f="Name" value="${escapeAttr(it.Name)}"></label>
+        <label>Kind<input type="text" data-f="Kind" value="${escapeAttr(it.Kind)}" placeholder="Consumable / Thrown / Utility / Buff / Revive / Key Item"></label>
+        <label>Effect<textarea data-f="Effect">${escapeHtml(it.Effect)}</textarea></label>
+        <div class="modal-row">
+          <label>Stack<input type="number" data-f="Stack" min="1" value="${it.Stack}"></label>
+          <label style="flex-direction:row;align-items:center;gap:6px;margin-top:20px"><input type="checkbox" data-f="Existing" ${it.Existing?'checked':''}> Already implemented in code</label>
+        </div>
+        <label>Notes<textarea data-f="Notes">${escapeHtml(it.Notes)}</textarea></label>
+        <div class="modal-footer">
+          ${isNew ? '' : '<button class="modal-btn danger" data-action="delete">Delete</button>'}
+          <div class="right">
+            <button class="modal-btn" data-action="cancel">Cancel</button>
+            <button class="modal-btn primary" data-action="save">${isNew?'Create':'Save'}</button>
+          </div>
+        </div>
+      </div>
+    `;
+    openModal(html, (root) => {
+      const panel = qs('[data-panel]', root);
+      qs('[data-action="cancel"]', panel).addEventListener('click', closeModal);
+      qs('[data-action="save"]', panel).addEventListener('click', async () => {
+        const fields = {};
+        qsa('[data-f]', panel).forEach(el => {
+          const k = el.getAttribute('data-f');
+          let v;
+          if (el.type === 'checkbox')      v = el.checked;
+          else if (el.type === 'number')   v = Number(el.value) || 0;
+          else                             v = el.value;
+          fields[k] = v;
+        });
+        if(!fields.Name || !String(fields.Name).trim()){
+          alert('Name is required.');
+          return;
+        }
+        const key = isNew ? genId('item') : it.Id;
+        if(isNew){
+          const maxSo = itemsState.reduce((m,x) => Math.max(m, x.SortOrder), 0);
+          fields.SortOrder = maxSo + 1000;
+          fields.Hidden = false;
+        }
+        closeModal();
+        await pushRow('Items', key, fields);
+        renderItems();
+        fetchAll();
+      });
+      if(!isNew){
+        qs('[data-action="delete"]', panel).addEventListener('click', () => {
+          const footer = qs('.modal-footer', panel);
+          footer.innerHTML = `
+            <div class="modal-confirm-inline">
+              Hide this item? Recoverable from the sheet.
+              <button class="modal-btn danger" data-action="confirm-delete">Yes, hide</button>
+              <button class="modal-btn" data-action="cancel-delete">No</button>
+            </div>
+          `;
+          qs('[data-action="cancel-delete"]', footer).addEventListener('click', closeModal);
+          qs('[data-action="confirm-delete"]', footer).addEventListener('click', async () => {
+            closeModal();
+            await pushRow('Items', it.Id, { Hidden: true });
+            renderItems();
+            fetchAll();
+          });
+        });
+      }
+    });
   }
 })();
