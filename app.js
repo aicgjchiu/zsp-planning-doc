@@ -351,34 +351,78 @@
     }
   }
 
+  async function bootstrapIfEmpty(){
+    // Build seed tasks from window.TASKS
+    const seedTasks = [];
+    const src = window.TASKS || {};
+    Object.keys(src).forEach(colKey => {
+      const memberId = LEGACY_COL_TO_MEMBER[colKey];
+      if(!memberId) return;
+      (src[colKey] || []).forEach((t, idx) => {
+        seedTasks.push({
+          TaskId:    legacyTaskId(colKey, t, idx),
+          MemberId:  memberId,
+          Title:     t.title || '',
+          Body:      t.body  || '',
+          Phase:     t.phase || 1,
+          Priority:  t.p     || 'P1',
+          Status:    'todo',
+          Notes:     '',
+          Assignee:  '',
+          Hidden:    false,
+          SortOrder: (idx + 1) * 1000,
+          CreatedAt: '',
+          UpdatedAt: '',
+          UpdatedBy: '',
+        });
+      });
+    });
+
+    try{
+      const res = await fetch(SHEET_ENDPOINT, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify({ Action:'bootstrap', Tasks: seedTasks, Team: SEED_TEAM }),
+      });
+      const json = await res.json();
+      if(!json.ok) throw new Error(json.error || 'bootstrap failed');
+      if(json.seeded){
+        // Re-fetch so state reflects the seeded rows
+        const r2 = await fetch(SHEET_ENDPOINT, { method:'GET' });
+        const j2 = await r2.json();
+        taskState = (j2.tasks || []).map(normalizeTaskRow);
+        teamState = (j2.team  || []).map(normalizeTeamRow);
+      }
+    }catch(err){
+      console.warn('[bootstrap] error:', err);
+    }
+  }
+
   function renderBoard(){
     const host = qs('#board');
     if(!host) return;
-    const cols = [
-      { key:'programmer', role:'Programmer', who:'You', chipClass:'code' },
-      { key:'char',       role:'Character Artist', who:'Artist · Char', chipClass:'char' },
-      { key:'env',        role:'Environment / Concept', who:'Artist · Env', chipClass:'env' },
-      { key:'vfx',        role:'VFX & Rigging', who:'Artist · VFX', chipClass:'vfx' },
-    ];
-    host.innerHTML = cols.map(c=>{
-      const all = (window.TASKS[c.key]||[]);
-      const tasks = all.map((t,i)=>({ t, id: taskId(c.key,t,i) }))
-                       .filter(x=>currentPhaseFilter==='all' || String(x.t.phase)===currentPhaseFilter);
-      // per-column summary (across ALL phases, stable)
+    const activeTeam = teamState.filter(m => m.Active).slice().sort((a,b) => a.Order - b.Order);
+    const visibleTasks = taskState.filter(t => !t.Hidden);
+    const canEdit = !!userName;
+
+    host.innerHTML = activeTeam.map(m => {
+      const roleClass = (ROLE_KEYS.find(r => r.v === m.RoleKey) || {}).v === 'programmer' ? 'code' : (m.RoleKey || 'code');
+      const mine = visibleTasks
+        .filter(t => t.MemberId === m.MemberId)
+        .sort((a,b) => a.SortOrder - b.SortOrder);
+      const filtered = mine.filter(t => currentPhaseFilter === 'all' || String(t.Phase) === currentPhaseFilter);
       const counts = { todo:0, progress:0, blocked:0, done:0 };
-      all.forEach((t,i)=>{
-        const id = taskId(c.key,t,i);
-        const s = (remoteState[id] && remoteState[id].Status) || 'todo';
-        counts[s] = (counts[s]||0) + 1;
-      });
+      mine.forEach(t => { counts[t.Status] = (counts[t.Status] || 0) + 1; });
+
       return `
-        <div class="col">
+        <div class="col" data-member-id="${escapeAttr(m.MemberId)}">
           <div class="col-head">
-            <span class="chip ${c.chipClass}">${c.chipClass}</span>
-            <span class="role">${c.role}</span>
-            <span class="who">${c.who}</span>
+            <span class="chip ${roleClass}">${escapeHtml(m.RoleKey)}</span>
+            <span class="role">${escapeHtml(m.RoleLabel)}</span>
+            <span class="who">${escapeHtml(m.Name)}</span>
+            <button class="col-add-btn" data-member-id="${escapeAttr(m.MemberId)}" ${canEdit?'':'disabled title="Set your name first"'}>＋</button>
           </div>
-          <div class="col-count small mono-cell" style="margin-bottom:4px">${tasks.length} showing · ${all.length} total</div>
+          <div class="col-count small mono-cell" style="margin-bottom:4px">${filtered.length} showing · ${mine.length} total</div>
           <div class="status-summary">
             <span><b>${counts.done}</b> done</span>
             <span><b>${counts.progress}</b> wip</span>
@@ -386,36 +430,40 @@
             <span><b>${counts.todo}</b> todo</span>
           </div>
           <div style="height:10px"></div>
-          ${tasks.map(({t,id})=>{
-            const rem = remoteState[id] || {};
-            const st = rem.Status || 'todo';
-            const notes = rem.Notes || '';
-            const upBy = rem.UpdatedBy || '';
-            const upAt = rem.UpdatedAt ? formatTimeAgo(rem.UpdatedAt) : '';
-            const metaLine = (upBy || upAt) ? `<div class="t-lastupdate">↻ ${upBy || 'someone'}${upAt ? ' · '+upAt : ''}</div>` : '';
-            return `
-            <div class="task phase-${t.phase} st-${st}" data-task-id="${id}">
-              <div class="t-head">
-                <div class="t-title">${t.title}</div>
-                <div class="t-meta">P${t.phase} · ${t.p}</div>
-              </div>
-              <div class="t-body">${t.body}</div>
-              <textarea class="t-notes" data-task-id="${id}" placeholder="Notes (blockers, context, handoff)…" rows="2">${escapeHtml(notes)}</textarea>
-              <div class="t-footer">
-                <select class="status-select" data-task-id="${id}">
-                  ${STATUSES.map(s=>`<option value="${s.v}" ${st===s.v?'selected':''}>${s.label}</option>`).join('')}
-                </select>
-                ${metaLine}
-              </div>
-            </div>
-          `;}).join('') || '<div class="small" style="padding:8px">No tasks in this phase.</div>'}
+          ${filtered.map(t => renderTaskCard(t, canEdit)).join('') || '<div class="small" style="padding:8px">No tasks in this phase.</div>'}
         </div>
       `;
     }).join('');
 
-    // status dropdown → push Status
-    qsa('.status-select', host).forEach(sel=>{
-      sel.addEventListener('change', ()=>{
+    wireBoardEvents(host);
+  }
+
+  function renderTaskCard(t, canEdit){
+    const upBy = t.UpdatedBy || '';
+    const upAt = t.UpdatedAt ? formatTimeAgo(t.UpdatedAt) : '';
+    const metaLine = (upBy || upAt) ? `<div class="t-lastupdate">↻ ${escapeHtml(upBy || 'someone')}${upAt ? ' · '+upAt : ''}</div>` : '';
+    return `
+      <div class="task phase-${t.Phase} st-${t.Status}" data-task-id="${escapeAttr(t.TaskId)}">
+        <div class="t-head">
+          <div class="t-title">${escapeHtml(t.Title)}</div>
+          <div class="t-meta">Phase ${t.Phase} · Pri ${t.Priority.replace(/^P/,'')}</div>
+          <button class="t-menu-btn" data-task-id="${escapeAttr(t.TaskId)}" ${canEdit?'':'disabled title="Set your name first"'}>⋯</button>
+        </div>
+        <div class="t-body">${escapeHtml(t.Body)}</div>
+        <textarea class="t-notes" data-task-id="${escapeAttr(t.TaskId)}" placeholder="Notes (blockers, context, handoff)…" rows="2">${escapeHtml(t.Notes)}</textarea>
+        <div class="t-footer">
+          <select class="status-select" data-task-id="${escapeAttr(t.TaskId)}">
+            ${STATUSES.map(s=>`<option value="${s.v}" ${t.Status===s.v?'selected':''}>${s.label}</option>`).join('')}
+          </select>
+          ${metaLine}
+        </div>
+      </div>
+    `;
+  }
+
+  function wireBoardEvents(host){
+    qsa('.status-select', host).forEach(sel => {
+      sel.addEventListener('change', () => {
         const id = sel.getAttribute('data-task-id');
         const v = sel.value;
         const card = sel.closest('.task');
@@ -423,41 +471,48 @@
           card.classList.remove('st-todo','st-progress','st-blocked','st-done');
           card.classList.add('st-'+v);
         }
-        pushUpdate(id, { Status: v }).then(()=> renderBoardSummaryOnly());
+        pushRow('Tasks', id, { Status: v }).then(() => renderBoardSummaryOnly());
       });
     });
-    // notes textarea → push on blur or debounced
-    qsa('.t-notes', host).forEach(ta=>{
+    qsa('.t-notes', host).forEach(ta => {
       let timer = null;
       let lastSaved = ta.value;
-      const flush = ()=>{
+      const flush = () => {
         if(ta.value === lastSaved) return;
         lastSaved = ta.value;
         const id = ta.getAttribute('data-task-id');
-        pushUpdate(id, { Notes: ta.value });
+        pushRow('Tasks', id, { Notes: ta.value });
       };
-      ta.addEventListener('input', ()=>{
-        clearTimeout(timer);
-        timer = setTimeout(flush, 1200); // debounce 1.2s
+      ta.addEventListener('input', () => { clearTimeout(timer); timer = setTimeout(flush, 1200); });
+      ta.addEventListener('blur',  () => { clearTimeout(timer); flush(); });
+    });
+    qsa('.col-add-btn', host).forEach(btn => {
+      btn.addEventListener('click', () => {
+        if(btn.disabled) return;
+        openEditModal(null, btn.getAttribute('data-member-id'));
       });
-      ta.addEventListener('blur', ()=>{ clearTimeout(timer); flush(); });
+    });
+    qsa('.t-menu-btn', host).forEach(btn => {
+      btn.addEventListener('click', () => {
+        if(btn.disabled) return;
+        openEditModal(btn.getAttribute('data-task-id'), null);
+      });
     });
   }
+
+  function escapeAttr(s){ return escapeHtml(s).replace(/"/g,'&quot;'); }
 
   function renderBoardSummaryOnly(){
     const host = qs('#board');
     if(!host) return;
-    const cols = [{key:'programmer'},{key:'char'},{key:'env'},{key:'vfx'}];
-    const colEls = qsa('.col', host);
-    cols.forEach((c, ci)=>{
-      const all = (window.TASKS[c.key]||[]);
+    const activeTeam = teamState.filter(m => m.Active).slice().sort((a,b) => a.Order - b.Order);
+    const visibleTasks = taskState.filter(t => !t.Hidden);
+    qsa('.col', host).forEach(colEl => {
+      const memberId = colEl.getAttribute('data-member-id');
+      const mine = visibleTasks.filter(t => t.MemberId === memberId);
       const counts = { todo:0, progress:0, blocked:0, done:0 };
-      all.forEach((t,i)=>{
-        const id = taskId(c.key,t,i);
-        const s = (remoteState[id] && remoteState[id].Status) || 'todo';
-        counts[s] = (counts[s]||0) + 1;
-      });
-      const sum = qs('.status-summary', colEls[ci]);
+      mine.forEach(t => { counts[t.Status] = (counts[t.Status] || 0) + 1; });
+      const sum = qs('.status-summary', colEl);
       if(sum){
         sum.innerHTML = `
           <span><b>${counts.done}</b> done</span>
@@ -527,4 +582,7 @@
     // update the "synced Xs ago" pill every second
     setInterval(updateSyncPill, 1000);
   }
+
+  function openEditModal(taskId, preMemberId){ console.log('openEditModal stub', taskId, preMemberId); }
+  function openTeamModal(){ console.log('openTeamModal stub'); }
 })();
