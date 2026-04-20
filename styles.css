@@ -318,7 +318,18 @@ hr.soft{border:none;border-top:1px solid var(--line);margin:22px 0}
   border-radius: 10px; box-shadow: 0 20px 60px rgba(0,0,0,0.35);
   width: 100%; max-width: 560px; padding: 24px;
   display: flex; flex-direction: column; gap: 14px;
+  overflow: hidden;
+  box-sizing: border-box;
 }
+.modal-panel table.sheet { table-layout: fixed; width: 100%; }
+.modal-panel table.sheet th, .modal-panel table.sheet td { padding: 6px 8px; vertical-align: middle; word-break: break-word; }
+.modal-panel table.sheet input[type=text], .modal-panel table.sheet select {
+  width: 100%; box-sizing: border-box; padding: 4px 6px; font: inherit;
+  border: 1px solid #ddd; border-radius: 4px; background: #fff; color: #111;
+}
+.modal-panel table.sheet .modal-btn { padding: 2px 6px; font-size: 12px; }
+.modal-panel table.sheet td:nth-child(5) { display: flex; gap: 4px; padding: 6px 4px; }
+.modal-panel table.sheet td:last-child label { flex-direction: row !important; align-items: center; gap: 4px; font-size: 11px; }
 .modal-panel h3 { margin: 0; font-size: 18px; }
 .modal-panel label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: #666; }
 .modal-panel label input, .modal-panel label textarea, .modal-panel label select {
