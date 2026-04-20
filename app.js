@@ -398,7 +398,17 @@
     }
   }
 
+  function renderLegend(){
+    const host = qs('#phase-priority-legend');
+    if(!host) return;
+    const phases = (window.PHASES || [])
+      .map(p => `${p.num} ${escapeHtml(p.name)}`)
+      .join(' · ');
+    host.innerHTML = `<b>Phase</b> ${phases || '1–6'} &nbsp;·&nbsp;·&nbsp;·&nbsp; <b>Priority</b> P0 Must · P1 Should · P2 Nice`;
+  }
+
   function renderBoard(){
+    renderLegend();
     const host = qs('#board');
     if(!host) return;
     const activeTeam = teamState.filter(m => m.Active).slice().sort((a,b) => a.Order - b.Order);
@@ -546,6 +556,7 @@
     renderMaps();
     renderSystems();
     renderBoard();
+    renderLegend();
 
     // phase filter wiring
     qsa('.phase-filter button').forEach(b=>{
