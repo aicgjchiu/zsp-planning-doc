@@ -136,17 +136,28 @@
   function renderItems(){
     const host = qs('#items-table tbody');
     if(!host) return;
-    host.innerHTML = window.ITEMS.map((it,i)=>`
+    const canEdit = !!userName;
+    const rows = itemsState
+      .filter(it => !it.Hidden)
+      .slice()
+      .sort((a,b) => a.SortOrder - b.SortOrder);
+    host.innerHTML = rows.map((it, i) => `
       <tr>
         <td class="mono dim">${String(i+1).padStart(2,'0')}</td>
-        <td><b>${it.name}</b></td>
-        <td>${it.kind}</td>
-        <td>${it.effect}</td>
-        <td class="num">${it.stack}</td>
-        <td>${it.existing ? '<span class="chip done">Implemented</span>' : '<span class="chip">To build</span>'}</td>
-        <td class="dim">${it.notes}</td>
+        <td><b>${escapeHtml(it.Name)}</b></td>
+        <td>${escapeHtml(it.Kind)}</td>
+        <td>${escapeHtml(it.Effect)}</td>
+        <td class="num">${it.Stack}</td>
+        <td>${it.Existing ? '<span class="chip done">Implemented</span>' : '<span class="chip">To build</span>'}</td>
+        <td class="dim">${escapeHtml(it.Notes)} <button class="row-menu-btn" data-item-id="${escapeAttr(it.Id)}" ${canEdit?'':'disabled title="Set your name first"'}>⋯</button></td>
       </tr>
     `).join('');
+    qsa('.row-menu-btn', host).forEach(btn => {
+      btn.addEventListener('click', () => {
+        if(btn.disabled) return;
+        openItemModal(btn.getAttribute('data-item-id'));
+      });
+    });
   }
 
   // --- Render: Maps ---
@@ -289,6 +300,10 @@
         await bootstrapIfEmpty();
       }
       renderBoard();
+      renderCharacters();
+      renderItems();
+      renderMaps();
+      renderSystems();
       if(!userName){
         const n = (prompt('Enter your name — shown on tasks you create or update. You can change it later.') || '').trim();
         if(n){
@@ -1045,5 +1060,79 @@
 
   function openCharacterModal(id){ alert('Character editor coming in Stage C.'); }
   function openMapModal(id){ alert('Map editor coming in Stage B.'); }
-  // openItemModal and openSystemModal are implemented in Task 8 / 9 (next).
+  function openItemModal(id){
+    const isNew = !id;
+    const it = isNew
+      ? { Id:'', Name:'', Kind:'', Effect:'', Stack:1, Existing:false, Notes:'', Hidden:false, SortOrder:0 }
+      : itemsState.find(x => x.Id === id);
+    if(!it){ alert('Item not found.'); return; }
+
+    const html = `
+      <div class="modal-panel" data-panel>
+        <h3>${isNew?'Add Item':'Edit Item'}</h3>
+        <label>Name<input type="text" data-f="Name" value="${escapeAttr(it.Name)}"></label>
+        <label>Kind<input type="text" data-f="Kind" value="${escapeAttr(it.Kind)}" placeholder="Consumable / Thrown / Utility / Buff / Revive / Key Item"></label>
+        <label>Effect<textarea data-f="Effect">${escapeHtml(it.Effect)}</textarea></label>
+        <div class="modal-row">
+          <label>Stack<input type="number" data-f="Stack" min="1" value="${it.Stack}"></label>
+          <label style="flex-direction:row;align-items:center;gap:6px;margin-top:20px"><input type="checkbox" data-f="Existing" ${it.Existing?'checked':''}> Already implemented in code</label>
+        </div>
+        <label>Notes<textarea data-f="Notes">${escapeHtml(it.Notes)}</textarea></label>
+        <div class="modal-footer">
+          ${isNew ? '' : '<button class="modal-btn danger" data-action="delete">Delete</button>'}
+          <div class="right">
+            <button class="modal-btn" data-action="cancel">Cancel</button>
+            <button class="modal-btn primary" data-action="save">${isNew?'Create':'Save'}</button>
+          </div>
+        </div>
+      </div>
+    `;
+    openModal(html, (root) => {
+      const panel = qs('[data-panel]', root);
+      qs('[data-action="cancel"]', panel).addEventListener('click', closeModal);
+      qs('[data-action="save"]', panel).addEventListener('click', async () => {
+        const fields = {};
+        qsa('[data-f]', panel).forEach(el => {
+          const k = el.getAttribute('data-f');
+          let v;
+          if (el.type === 'checkbox')      v = el.checked;
+          else if (el.type === 'number')   v = Number(el.value) || 0;
+          else                             v = el.value;
+          fields[k] = v;
+        });
+        if(!fields.Name || !String(fields.Name).trim()){
+          alert('Name is required.');
+          return;
+        }
+        const key = isNew ? genId('item') : it.Id;
+        if(isNew){
+          const maxSo = itemsState.reduce((m,x) => Math.max(m, x.SortOrder), 0);
+          fields.SortOrder = maxSo + 1000;
+          fields.Hidden = false;
+        }
+        closeModal();
+        await pushRow('Items', key, fields);
+        fetchAll();
+      });
+      if(!isNew){
+        qs('[data-action="delete"]', panel).addEventListener('click', () => {
+          const footer = qs('.modal-footer', panel);
+          footer.innerHTML = `
+            <div class="modal-confirm-inline">
+              Hide this item? Recoverable from the sheet.
+              <button class="modal-btn danger" data-action="confirm-delete">Yes, hide</button>
+              <button class="modal-btn" data-action="cancel-delete">No</button>
+            </div>
+          `;
+          qs('[data-action="cancel-delete"]', footer).addEventListener('click', closeModal);
+          qs('[data-action="confirm-delete"]', footer).addEventListener('click', async () => {
+            closeModal();
+            await pushRow('Items', it.Id, { Hidden: true });
+            fetchAll();
+          });
+        });
+      }
+    });
+  }
+  // openSystemModal is implemented in Task 9 (next).
 })();
