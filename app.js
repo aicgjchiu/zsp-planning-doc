@@ -604,8 +604,87 @@
 
   // Real implementations come in later tasks — keep stubs functional so wiring works
   function openEditModal(taskId, preMemberId){
-    openModal(`<div class="modal-panel"><h3>Edit Task</h3><p>Not yet implemented (task ${taskId || 'new'}, member ${preMemberId || '-'}).</p><div class="modal-footer"><div class="right"><button class="modal-btn" data-close>Close</button></div></div></div>`, (root) => {
-      qs('[data-close]', root).addEventListener('click', closeModal);
+    const isNew = !taskId;
+    const t = isNew
+      ? { TaskId:'', MemberId: preMemberId || (teamState[0] && teamState[0].MemberId) || '', Title:'', Body:'', Phase:1, Priority:'P1', Status:'todo', Notes:'', Assignee:'', Hidden:false, SortOrder:0 }
+      : taskState.find(x => x.TaskId === taskId);
+    if(!t){ alert('Task not found.'); return; }
+
+    const phaseOpts = (window.PHASES || []).map(p => `<option value="${p.num}" ${t.Phase===p.num?'selected':''}>Phase ${p.num} — ${escapeHtml(p.name)}</option>`).join('')
+      || [1,2,3,4,5,6].map(n => `<option value="${n}" ${t.Phase===n?'selected':''}>Phase ${n}</option>`).join('');
+    const prioOpts = PRIORITIES.map(p => `<option value="${p.v}" ${t.Priority===p.v?'selected':''}>${escapeHtml(p.label)}</option>`).join('');
+    const memberOpts = teamState.filter(m => m.Active).slice().sort((a,b)=>a.Order-b.Order)
+      .map(m => `<option value="${escapeAttr(m.MemberId)}" ${t.MemberId===m.MemberId?'selected':''}>${escapeHtml(m.Name)} (${escapeHtml(m.RoleLabel)})</option>`).join('');
+
+    const html = `
+      <div class="modal-panel" data-panel>
+        <h3>${isNew?'Add Task':'Edit Task'}</h3>
+        <label>Title<input type="text" data-f="Title" value="${escapeAttr(t.Title)}"></label>
+        <label>Description<textarea data-f="Body">${escapeHtml(t.Body)}</textarea></label>
+        <div class="modal-row">
+          <label>Phase<select data-f="Phase">${phaseOpts}</select></label>
+          <label>Priority<select data-f="Priority">${prioOpts}</select></label>
+        </div>
+        <div class="modal-row">
+          <label>Column / Member<select data-f="MemberId">${memberOpts}</select></label>
+          <label>Assignee (optional override)<input type="text" data-f="Assignee" value="${escapeAttr(t.Assignee)}" placeholder="Leave blank for default"></label>
+        </div>
+        <div class="modal-footer">
+          ${isNew ? '' : '<button class="modal-btn danger" data-action="delete">Delete</button>'}
+          <div class="right">
+            <button class="modal-btn" data-action="cancel">Cancel</button>
+            <button class="modal-btn primary" data-action="save">${isNew?'Create':'Save'}</button>
+          </div>
+        </div>
+      </div>
+    `;
+    openModal(html, (root) => {
+      const panel = qs('[data-panel]', root);
+      qs('[data-action="cancel"]', panel).addEventListener('click', closeModal);
+      qs('[data-action="save"]', panel).addEventListener('click', async () => {
+        const fields = {};
+        qsa('[data-f]', panel).forEach(el => {
+          const k = el.getAttribute('data-f');
+          let v = el.value;
+          if(k === 'Phase') v = Number(v);
+          fields[k] = v;
+        });
+        if(!fields.Title || !String(fields.Title).trim()){
+          alert('Title is required.');
+          return;
+        }
+        const key = isNew ? genId('task') : t.TaskId;
+        if(isNew){
+          const maxSo = taskState
+            .filter(x => x.MemberId === fields.MemberId)
+            .reduce((m,x) => Math.max(m, x.SortOrder), 0);
+          fields.SortOrder = maxSo + 1000;
+          fields.Status = 'todo';
+          fields.Hidden = false;
+          fields.Notes = '';
+        }
+        closeModal();
+        await pushRow('Tasks', key, fields);
+        renderBoard();
+      });
+      if(!isNew){
+        qs('[data-action="delete"]', panel).addEventListener('click', () => {
+          const footer = qs('.modal-footer', panel);
+          footer.innerHTML = `
+            <div class="modal-confirm-inline">
+              Hide this task? Recoverable from the sheet.
+              <button class="modal-btn danger" data-action="confirm-delete">Yes, hide</button>
+              <button class="modal-btn" data-action="cancel-delete">No</button>
+            </div>
+          `;
+          qs('[data-action="cancel-delete"]', footer).addEventListener('click', closeModal);
+          qs('[data-action="confirm-delete"]', footer).addEventListener('click', async () => {
+            closeModal();
+            await pushRow('Tasks', t.TaskId, { Hidden: true });
+            renderBoard();
+          });
+        });
+      }
     });
   }
   function openTeamModal(){
