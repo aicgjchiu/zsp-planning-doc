@@ -489,7 +489,7 @@
           card.classList.remove('st-todo','st-progress','st-blocked','st-done');
           card.classList.add('st-'+v);
         }
-        pushRow('Tasks', id, { Status: v }).then(() => renderBoardSummaryOnly());
+        pushRow('Tasks', id, { Status: v }).then(() => fetchAll());
       });
     });
     qsa('.t-notes', host).forEach(ta => {
@@ -699,7 +699,7 @@
         }
         closeModal();
         await pushRow('Tasks', key, fields);
-        renderBoard();
+        fetchAll();
       });
       if(!isNew){
         qs('[data-action="delete"]', panel).addEventListener('click', () => {
@@ -715,7 +715,7 @@
           qs('[data-action="confirm-delete"]', footer).addEventListener('click', async () => {
             closeModal();
             await pushRow('Tasks', t.TaskId, { Hidden: true });
-            renderBoard();
+            fetchAll();
           });
         });
       }
@@ -829,7 +829,7 @@
             });
           }
         }
-        renderBoard();
+        fetchAll();
       });
     }
 
