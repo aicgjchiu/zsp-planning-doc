@@ -192,19 +192,42 @@
     { v:'blocked',  label:'Blocked' },
     { v:'done',     label:'Done' },
   ];
+  const PRIORITIES = [
+    { v:'P0', label:'P0 — Must have' },
+    { v:'P1', label:'P1 — Should have' },
+    { v:'P2', label:'P2 — Nice to have' },
+  ];
+  const ROLE_KEYS = [
+    { v:'programmer', label:'Programmer' },
+    { v:'char',       label:'Character Artist' },
+    { v:'env',        label:'Environment & Concept' },
+    { v:'vfx',        label:'VFX & Rigging' },
+  ];
+  const SEED_TEAM = [
+    { MemberId:'jeff',     Name:'Jeff',     RoleKey:'programmer', RoleLabel:'Programmer',            Order:1, Active:true },
+    { MemberId:'christie', Name:'Christie', RoleKey:'char',       RoleLabel:'Character Artist',      Order:2, Active:true },
+    { MemberId:'tachi',    Name:'Tachi',    RoleKey:'env',        RoleLabel:'Environment & Concept', Order:3, Active:true },
+    { MemberId:'jason',    Name:'Jason',    RoleKey:'vfx',        RoleLabel:'VFX & Rigging',         Order:4, Active:true },
+  ];
+  const LEGACY_COL_TO_MEMBER = { programmer:'jeff', char:'christie', env:'tachi', vfx:'jason' };
   const USER_KEY = 'zsp_user_name';
   const TAB_FILTER_KEY_CURRENT = 'zsp_phase_filter';
 
   let currentPhaseFilter = 'all';
   try{ currentPhaseFilter = localStorage.getItem(TAB_FILTER_KEY_CURRENT) || 'all'; }catch(e){}
 
-  // In-memory state of what's on the sheet: { [TaskId]: { Status, Notes, UpdatedAt, UpdatedBy, Assignee } }
-  let remoteState = {};
-  let syncStatus = 'idle'; // 'idle' | 'syncing' | 'error' | 'ok'
+  // Module state
+  let teamState = [];        // array of { MemberId, Name, RoleKey, RoleLabel, Order, Active, ... }
+  let taskState = [];        // array of task objects from sheet
+  let userName = '';         // cached identity
+  let syncStatus = 'idle';
   let lastSyncAt = null;
   let pendingWrites = 0;
 
-  function taskId(colKey, t, idx){
+  function genId(prefix){
+    return `${prefix}-${Date.now()}-${Math.floor(Math.random()*1e6).toString(36)}`;
+  }
+  function legacyTaskId(colKey, t, idx){
     const slug = (t.title||'').replace(/[^a-z0-9]+/gi,'-').toLowerCase().slice(0,40);
     return `${colKey}-p${t.phase}-${t.p}-${slug}-${idx}`;
   }
@@ -215,7 +238,8 @@
       n = (prompt('Your name (shown as "last updated by" on tasks):') || '').trim();
       if(n){ try{ localStorage.setItem(USER_KEY, n); }catch(e){} }
     }
-    return n || 'anonymous';
+    userName = n || '';
+    return userName;
   }
 
   async function fetchRemote(){
