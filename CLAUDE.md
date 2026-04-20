@@ -38,25 +38,27 @@ Single-page; each top-level `<main class="page" data-tab="...">` is one tab. `ap
 
 ### Task Board · Google Sheets sync
 
-Live-synced per-person task board backed by a Google Sheet via an Apps Script web app.
+Live-synced task board backed by a Google Sheet via an Apps Script web app. **The sheet is the source of truth for tasks themselves**, not just per-task state.
 
 - **Endpoint:** configured in `app.js` as `SHEET_ENDPOINT` (a Google Apps Script `/exec` URL).
-- **Sheet schema** — tab must be named `Tasks`, row 1 is headers, exactly:
-  `TaskId | Status | Assignee | Notes | UpdatedAt | UpdatedBy`
-- **Read:** `GET` to the endpoint returns `{ ok: true, rows: [...] }` — one object per sheet row, keyed by header.
-- **Write:** `POST` with `Content-Type: text/plain;charset=utf-8` (to avoid CORS preflight — Apps Script doesn't allow custom CORS headers) and a JSON body `{ TaskId, Status?, Notes?, UpdatedBy }`. Script appends if new, updates in place if TaskId exists.
-- **Polling:** `fetchRemote()` runs on page load and every 30s thereafter. Status dropdown writes push immediately; notes textareas push 1.2s after the user stops typing (debounced) or on blur.
-- **Identity:** the user's name is prompted once on first interaction and stored in `localStorage` under `zsp_user_name`; sent with every write as `UpdatedBy`.
+- **Backing sheet (inspect rows, debug, recover soft-deletes):** https://docs.google.com/spreadsheets/d/1Od7n8hbOO24SIJiyGR7ctfYTkkLdUXLVf06KiUCY0hQ/edit
+- **Two tabs:**
+  - **`Tasks`** headers (row 1, in order): `TaskId | MemberId | Title | Body | Phase | Priority | Status | Notes | Assignee | Hidden | SortOrder | CreatedAt | UpdatedAt | UpdatedBy`
+  - **`Team`** headers: `MemberId | Name | RoleKey | RoleLabel | Order | Active`
+- **Read:** `GET` returns `{ ok: true, tasks: [...], team: [...] }` — one object per row, keyed by header.
+- **Write:** `POST` with `Content-Type: text/plain;charset=utf-8` and JSON body `{ Tab: "Tasks"|"Team", Key: <TaskId|MemberId>, Fields: { ... }, UpdatedBy: <name> }`. Script appends if key doesn't exist, otherwise updates only the named fields. `UpdatedAt` + `UpdatedBy` stamped automatically.
+- **Bootstrap:** on page load, if both tabs are empty, the client POSTs `{ Action: "bootstrap", Tasks: [...], Team: [...] }`. Script seeds rows atomically inside `LockService.getScriptLock()` and re-checks emptiness inside the critical section, so two simultaneous loads don't double-seed.
+- **Polling + immediate refetch:** `fetchAll()` runs on page load and every 30s thereafter. Every structural write (add/edit/soft-delete, team save, status change) refetches right after the push succeeds so teammate changes show up immediately. Notes textarea stays optimistic-only (debounced; 30s poll reconciles) to avoid clobbering active typing.
+- **Identity:** user's name is prompted on page load (via `DOMContentLoaded` → post-fetch prompt in `fetchAll`) and stored in `localStorage` under `zsp_user_name`. Stamped on every write as `UpdatedBy`. Add/Edit/Delete/Team buttons are disabled until identity is set; status/notes inline edits still work without it.
+- **Soft delete only:** setting `Hidden=TRUE` filters a task from the UI. Row stays in the sheet and can be recovered by flipping the flag manually.
 
-### Task IDs (stable across refreshes)
+### Task IDs
 
-Task IDs are derived from the in-code task data so sheet rows survive refreshes:
+- **Seeded tasks** (from the one-time `window.TASKS` migration) use a deterministic legacy ID: `${legacyColKey}-p${phase}-${priority}-${slug}-${idx}`. This keeps any pre-existing sheet rows aligned during the migration.
+- **New tasks** (created via the UI) get a client-generated ID: `task-<timestamp>-<random>`. Stable for the lifetime of the row.
+- `MemberId` links a task to a team member; `RoleKey` on the team member drives chip color.
 
-```js
-taskId(colKey, t, idx) = `${colKey}-p${t.phase}-${t.p}-${slug(t.title)}-${idx}`
-```
-
-`colKey` is the role column (`programmer` / `char` / `env` / `vfx`). **If you reorder or rewrite `window.TASKS` in `data.js`, old rows in the sheet will be orphaned** — the page won't find them and their state effectively resets. Rename task bodies freely, but rename task *titles* carefully.
+`window.TASKS` in `data.js` is the seed source, used only on first-ever load into an empty sheet. A follow-up PR removes `window.TASKS` entirely once migration is verified; the sheet is the sole source of truth after that.
 
 ### Gantt
 
@@ -71,40 +73,11 @@ The Gantt is a CSS grid: a fixed 240px label column + 12 quarter columns of 120p
 
 ## Google Apps Script Backend
 
-The script that powers the task-board backend is deployed from the linked Google Sheet. Reference implementation lives in the Apps Script editor attached to the sheet.
+The script that powers the task-board backend is deployed from the Google Sheet (Extensions → Apps Script). A mirror of the current deployed script lives in **`apps-script.gs`** at the repo root — always keep it in sync with the editor after any deploy.
 
-**Backing sheet (task board data):** https://docs.google.com/spreadsheets/d/1Od7n8hbOO24SIJiyGR7ctfYTkkLdUXLVf06KiUCY0hQ/edit?gid=0#gid=0 — open this to inspect live row state, debug TaskId orphans, or edit the Apps Script (Extensions → Apps Script from this sheet).
+**High-level shape:** `doGet` returns both tabs; `doPost` routes to `handleUpsert` or `handleBootstrap` based on the request body. `handleBootstrap` wraps its check-and-write in `LockService.getScriptLock()` to prevent double-seeding on concurrent first loads.
 
-**Current script source:** mirrored in `apps-script.gs` at the repo root for reference. That file is not loaded by the site; when the deployed script changes, update `apps-script.gs` to match so the mirror stays accurate.
-
-Core logic:
-
-```javascript
-const SHEET_NAME = 'Tasks';
-
-function doGet() {
-  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_NAME);
-  const data = sheet.getDataRange().getValues();
-  const headers = data[0];
-  const rows = data.slice(1).map(r => {
-    const obj = {};
-    headers.forEach((h, i) => obj[h] = r[i]);
-    return obj;
-  });
-  return ContentService.createTextOutput(JSON.stringify({ ok: true, rows }))
-    .setMimeType(ContentService.MimeType.JSON);
-}
-
-function doPost(e) {
-  const body = JSON.parse(e.postData.contents);
-  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_NAME);
-  // find-or-append by TaskId; update Status / Notes / Assignee if present in body;
-  // always stamp UpdatedAt + UpdatedBy.
-  // See app.js::pushUpdate for the client side.
-}
-```
-
-**Deployment:** Apps Script editor → Deploy → New deployment → Web app → Execute as: Me, Who has access: Anyone → copy `/exec` URL into `SHEET_ENDPOINT` in `app.js`. **Any code change requires Deploy → Manage deployments → pencil icon → New version → Deploy** to take effect — otherwise the old code keeps serving.
+**Deployment:** Apps Script editor → Deploy → Manage deployments → pencil icon → New version → Deploy. Any code change requires a new version — otherwise the old code keeps serving.
 
 ## Local Development
 
@@ -146,7 +119,8 @@ Live URL: https://aicgjchiu.github.io/zsp-planning-doc/
 
 ## When Editing
 
-- **Change task content:** edit `window.TASKS` in `data.js`. Renaming a task title changes its TaskID and orphans its sheet row — prefer editing the `body` text and leaving `title` stable.
+- **Change task content:** edit tasks from the Task Board tab UI (click `⋯` on a card) — this is the new source of truth. `window.TASKS` in `data.js` is seed-only and no longer read after first load; edits there have no effect on the live board.
+- **Team composition:** use the Task Board's "Team" button to add / rename / reorder / deactivate members. No code change needed when the team composition shifts.
 - **Add a character / map / item:** append to `window.CHARACTERS` / `window.MAPS` / `window.ITEMS`. Each has a shape defined by how `app.js::renderCharacters` etc. consume them — check the render functions to confirm required fields.
 - **Shift a Gantt bar:** edit `window.GANTT` — `start` and `end` are quarter indices (0 = Y1Q1, 11 = Y3Q4). Keep `color` in sync with the `role` so the bar matches the row.
 - **Add a phase / lane color:** add a CSS variable in `:root`, then a matching `.chip.X` / `.dot.X` / `.gbar.X` rule. Phases use `.phase-1` through `.phase-6` with left-border color on task cards.
