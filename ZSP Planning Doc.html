@@ -1,0 +1,340 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>ZSP · Portal Pivot — Planning Doc</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css"/>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="brand"><b>ZSP</b> · Portal Pivot · Planning Doc</div>
+  <nav>
+    <button data-target="overview">Overview</button>
+    <button data-target="roadmap">Roadmap</button>
+    <button data-target="design">Design Doc</button>
+    <button data-target="tasks">Task Board</button>
+  </nav>
+  <div class="meta">v0.1 · 3-year plan · 1 prog + 3 artists</div>
+</div>
+
+<!-- =================== OVERVIEW =================== -->
+<main class="page" data-tab="overview">
+  <div class="page-header">
+    <div class="kicker">Internal · Production Planning</div>
+    <h1>從關卡式打怪，到 Portal 爭奪戰 — 3-year shipping plan</h1>
+    <p>A consolidated planning doc for the ZSP Portal Pivot: roadmap across code + art lanes, design-doc tables for characters / abilities / items / maps, and a per-person task board. Built from the current UE 5.7 codebase (GAS, Steam sessions, inventory, quest system already in place) and the v2.0 Pivot deck.</p>
+  </div>
+
+  <div class="grid cols-4">
+    <div class="card"><div class="label">Team</div><div class="stat"><span class="num">4</span><span class="unit">people</span></div><div class="small mt-4">1 programmer (you) · 3 artists (char / env / vfx-rig)</div></div>
+    <div class="card"><div class="label">Timeline</div><div class="stat"><span class="num">36</span><span class="unit">months</span></div><div class="small mt-4">6 phases · 6 milestones · Y1 VS → Y3 ship</div></div>
+    <div class="card"><div class="label">Content Target</div><div class="stat"><span class="num">4 · 4 · 10</span><span class="unit">maps · chars · items</span></div><div class="small mt-4">Each character has 3 abilities (Q / R / T)</div></div>
+    <div class="card"><div class="label">Already in code</div><div class="stat"><span class="num">12</span><span class="unit">systems</span></div><div class="small mt-4">GAS, Inventory, Quests, Steam, HUD, Main-menu…</div></div>
+  </div>
+
+  <div class="section">
+    <div class="section-title"><span class="num">01</span><h2>What changes vs. current build</h2><div class="aside">from the v2.0 pivot</div></div>
+    <div class="grid cols-2">
+      <div class="card">
+        <div class="label">Keep · DNA</div>
+        <ul style="margin-left:16px;color:var(--ink-2);font-size:13px">
+          <li>Mythic exorcist roster across world cultures</li>
+          <li>1–4 player cooperative loop</li>
+          <li>Lighthearted, meme-flavored tone</li>
+          <li>Enemies drawn from each culture's folklore</li>
+        </ul>
+      </div>
+      <div class="card">
+        <div class="label">Change · Loop</div>
+        <ul style="margin-left:16px;color:var(--ink-2);font-size:13px">
+          <li>Chapters → Portal map-hop</li>
+          <li>Free weapon×skill combos → weapon-bound kits</li>
+          <li>Static enemies → dynamic vote-upgrades</li>
+          <li>Checkpoint revive → die-in-place + stacking CD</li>
+          <li>Player-vs-Enemy → dual Portal contest</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-title"><span class="num">02</span><h2>Phases at a glance</h2></div>
+    <div class="table-wrap">
+      <table class="sheet" id="phases-table">
+        <thead><tr><th style="width:60px">#</th><th>Phase</th><th style="width:120px">Window</th><th>Goal</th><th style="width:120px">Lane focus</th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="note">
+    <b>Reading order:</b> Overview (you are here) → Roadmap (Gantt + milestones) → Design Doc (spreadsheet-style reference for characters / abilities / items / maps / systems) → Task Board (per-person, filterable by phase). Preferred tab is remembered in localStorage.
+  </div>
+</main>
+
+<!-- =================== ROADMAP =================== -->
+<main class="page wide hidden" data-tab="roadmap">
+  <div class="page-header">
+    <div class="kicker">Roadmap · 3-year Gantt</div>
+    <h1>Roadmap · Code, Art, Milestones</h1>
+    <p>X-axis is 12 quarters. Each row is one contributor's track. The <em>Milestones</em> lane at the bottom is the hard checkpoint — everything above should converge on those dates.</p>
+  </div>
+
+  <div class="legend">
+    <span><span class="dot portal"></span>Portal / systems design</span>
+    <span><span class="dot code"></span>Programmer (you)</span>
+    <span><span class="dot char"></span>Character art</span>
+    <span><span class="dot env"></span>Environment / concept</span>
+    <span><span class="dot vfx"></span>VFX &amp; rigging</span>
+    <span><span class="dot" style="background:var(--c-milestone)"></span>Milestone</span>
+  </div>
+
+  <div class="gantt-scroll"><div id="gantt" class="gantt"></div></div>
+  <div class="small" style="margin-top:8px;color:var(--ink-3)">↔ Scroll horizontally to see all 12 quarters · hover a bar for full detail</div>
+
+  <div class="section">
+    <div class="section-title"><span class="num">M</span><h2>Milestones</h2></div>
+    <div class="milestone-strip" id="milestones"></div>
+  </div>
+
+  <div class="section">
+    <div class="section-title"><span class="num">03</span><h2>Quarter-by-quarter shipping plan</h2></div>
+    <div class="table-wrap">
+      <table class="sheet">
+        <thead><tr>
+          <th style="width:70px">Quarter</th>
+          <th>Programmer — Code</th>
+          <th>Character Artist</th>
+          <th>Environment / Concept</th>
+          <th>VFX &amp; Rigging</th>
+          <th style="width:140px">End-of-quarter gate</th>
+        </tr></thead>
+        <tbody>
+          <tr><td class="mono">Y1 Q1</td>
+            <td>Portal actor + Activate channel; random spawn manager; AI target-switch.</td>
+            <td>Daoshi 道士 retopo + UV + bakes.</td>
+            <td>Hamlet 靜村 concept art (6 keyframes).</td>
+            <td>Daoshi rig + retarget; talisman VFX first pass.</td>
+            <td>Internal demo: find Portal in Hamlet 靜村 block-out.</td>
+          </tr>
+          <tr><td class="mono">Y1 Q2</td>
+            <td>Activate defense wave logic; spawn from Portal while channeling.</td>
+            <td>Daoshi final textures; Jiangshi 殭屍 base enemy.</td>
+            <td>Hamlet 靜村 greybox playable.</td>
+            <td>Talisman VFX polish; Portal VFX prototype.</td>
+            <td><b>M1 · First Portal Activate</b> — loop smokes out.</td>
+          </tr>
+          <tr><td class="mono">Y1 Q3</td>
+            <td>Enemy Portal + soul energy; vote-upgrade backend.</td>
+            <td>Missionary 傳教士 sculpt start.</td>
+            <td>Hamlet 靜村 final; Monastery 雪山修道院 concept.</td>
+            <td>Portal VFX final; miasma atmos shader.</td>
+            <td>Dual Portal demoable.</td>
+          </tr>
+          <tr><td class="mono">Y1 Q4</td>
+            <td>Revive CD stacking; 5s I-frame on level-up; weapon↔skill binding.</td>
+            <td>Missionary retopo + rig handoff.</td>
+            <td>Monastery 雪山修道院 greybox.</td>
+            <td>Missionary rig + cloth.</td>
+            <td><b>M2 · Two-map loop + vote</b> — Steam 4p.</td>
+          </tr>
+          <tr><td class="mono">Y2 Q1</td>
+            <td>Missionary ability kit; Shaman ability kit.</td>
+            <td>Shaman 薩滿 sculpt start.</td>
+            <td>Monastery 雪山修道院 final dress.</td>
+            <td>Missionary VFX; Shaman rig.</td>
+            <td>3 characters playable.</td>
+          </tr>
+          <tr><td class="mono">Y2 Q2</td>
+            <td>Boss AI framework; items 4–10.</td>
+            <td>Shaman retopo; Werewolf 狼人 set.</td>
+            <td>Bayou 瘴氣沼澤 concept + greybox.</td>
+            <td>Shaman VFX; boss rigs (Corpse General 屍將軍, Alpha Wolf 狼王).</td>
+            <td><b>M3 · Closed Alpha</b> — external playtest.</td>
+          </tr>
+          <tr><td class="mono">Y2 Q3</td>
+            <td>Witch Doctor ability kit; matchmaking polish.</td>
+            <td>Witch Doctor 巫醫 sculpt; Bayou Zombies 巫毒殭屍.</td>
+            <td>Bayou 瘴氣沼澤 final dress; Steppe 無盡草原 concept.</td>
+            <td>Witch Doctor rig; voodoo VFX set.</td>
+            <td>4 characters playable.</td>
+          </tr>
+          <tr><td class="mono">Y2 Q4</td>
+            <td>Enemy ultimate upgrades (vote to summon boss).</td>
+            <td>Boss: Baron Saturday 星期六男爵; Khan 末代可汗 sculpt.</td>
+            <td>Steppe 無盡草原 greybox.</td>
+            <td>Baron VFX; mounted Khan rig.</td>
+            <td><b>M4 · Open Beta</b> — Steam beta branch.</td>
+          </tr>
+          <tr><td class="mono">Y3 Q1</td>
+            <td>Meta progression; save system; cosmetics unlocks.</td>
+            <td>Khan textures + final.</td>
+            <td>Steppe 無盡草原 final dress.</td>
+            <td>Khan VFX; boss ultimate FX.</td>
+            <td>Content-complete.</td>
+          </tr>
+          <tr><td class="mono">Y3 Q2</td>
+            <td>Localization (EN / zh-TW / zh-CN); accessibility.</td>
+            <td>Cosmetic skins (3 per character).</td>
+            <td>Lighting pass on all maps.</td>
+            <td>VFX LODs, budget pass.</td>
+            <td><b>M5 · Content Lock</b> — balancing only.</td>
+          </tr>
+          <tr><td class="mono">Y3 Q3</td>
+            <td>Optimization + stability; Steam cert prep.</td>
+            <td>Character polish pass.</td>
+            <td>Storefront key art + screenshots.</td>
+            <td>Trailer VFX flourishes.</td>
+            <td>Release candidate.</td>
+          </tr>
+          <tr><td class="mono">Y3 Q4</td>
+            <td>Launch + week-one patch.</td>
+            <td>Standby / live-ops art.</td>
+            <td>Live-ops environment tweaks.</td>
+            <td>Launch VFX hotfixes.</td>
+            <td><b>M6 · Ship</b> 🚀</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="note">
+    <b>Scheduling assumptions.</b> 1 programmer + 3 artists (char / env / vfx-rig). No overtime. Each character takes ~2 quarters (char art → rig/VFX → programmer hooks up abilities). Each map takes ~3 quarters (concept → greybox → final dress) and overlaps with the previous. Buffer comes from the Phase 5 content-lock — if Phase 3–4 slips by a quarter, cut cosmetic skins, not content.
+  </div>
+</main>
+
+<!-- =================== DESIGN DOC =================== -->
+<main class="page wide hidden" data-tab="design">
+  <div class="page-header">
+    <div class="kicker">Design Doc · v0.1</div>
+    <h1>Design Doc — Characters, Abilities, Items, Maps, Systems</h1>
+    <p>Spreadsheet-style reference, mirrored after the doc you shared (one sheet per system), consolidated on one page. Keep this as the source of truth while prototyping. Only map / character / enemy / ability names carry Chinese.</p>
+  </div>
+
+  <div class="section">
+    <div class="section-title"><span class="num">01</span><h2>Core Loop (one minute read)</h2></div>
+    <div class="grid cols-3">
+      <div class="card"><div class="label">01 · Enter</div><p>Arrive at map carrying all upgrades from the previous map. Enemies are already scaled to the cumulative vote-upgrades.</p></div>
+      <div class="card"><div class="label">02 · Find Portal</div><p>Portal spawns at a random tagged point with minimum distance from player spawn. Players must explore to find it.</p></div>
+      <div class="card"><div class="label">03 · Optional quests</div><p>Light side objectives (kill tags, reach triggers, interact) via the existing Quest System. Skippable.</p></div>
+      <div class="card"><div class="label">04 · Kill → Level</div><p>On level-up, a 5s invincibility popup appears to pick an upgrade; the world keeps ticking. Weapon determines the upgrade pool.</p></div>
+      <div class="card"><div class="label">05 · Activate</div><p>Channel 5s on the Portal. Enemy AI pivots to attack the Portal — players defend. On completion: leave or stay to farm.</p></div>
+      <div class="card"><div class="label">06 · Farm / Leave</div><p>5-minute CD to re-Activate for a 2nd round on the same map, or leave immediately for the next. The Enemy Portal never sleeps.</p></div>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-title"><span class="num">02</span><h2>Characters × Abilities</h2><div class="aside">4 characters · 3 abilities each · 12 total</div></div>
+    <div id="characters" class="grid cols-2" style="gap:20px"></div>
+  </div>
+
+  <div class="section">
+    <div class="section-title"><span class="num">03</span><h2>Items</h2><div class="aside">10 pickups · 2 already in code</div></div>
+    <div class="table-wrap">
+      <table class="sheet" id="items-table">
+        <thead><tr>
+          <th style="width:42px">#</th>
+          <th>Name</th>
+          <th style="width:110px">Kind</th>
+          <th>Effect</th>
+          <th style="width:60px" class="num">Stack</th>
+          <th style="width:130px">Status</th>
+          <th>Notes</th>
+        </tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-title"><span class="num">04</span><h2>Maps</h2><div class="aside">4 maps · each with one boss</div></div>
+    <div id="maps" class="grid cols-2" style="gap:20px"></div>
+  </div>
+
+  <div class="section">
+    <div class="section-title"><span class="num">05</span><h2>Systems Matrix</h2><div class="aside">status · dependencies · owner</div></div>
+    <div class="table-wrap">
+      <table class="sheet" id="systems-table">
+        <thead><tr>
+          <th>System</th>
+          <th style="width:110px">Status</th>
+          <th style="width:180px">Depends on</th>
+          <th style="width:130px">Owner</th>
+          <th>Notes / Details</th>
+        </tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-title"><span class="num">06</span><h2>Open Questions</h2><div class="aside">from the pivot deck — still to resolve</div></div>
+    <div class="grid cols-2">
+      <div class="card">
+        <div class="label">Q1 · Portal spawn logic</div>
+        <p>Fully random? Or region-preference + min-distance? Must avoid spawn-kill — Portal appearing in the middle of an enemy cluster.</p>
+        <p class="small mt-4"><b>Proposal:</b> Weighted tagged points (<code>ATargetPoint</code>), min 80m from player start, at least 1 per map quadrant.</p>
+      </div>
+      <div class="card">
+        <div class="label">Q2 · 5-minute farm CD</div>
+        <p>Does the farm window feel pressured (Enemy Portal still absorbing)? Should CD be shortened?</p>
+        <p class="small mt-4"><b>Proposal:</b> Start at 5 min; tune from playtest data — if >60% of groups leave immediately, drop to 3 min.</p>
+      </div>
+      <div class="card">
+        <div class="label">Q3 · Portal durability balance</div>
+        <p>HP / defense / respawn time for both Portals need a balance spreadsheet. Prototype first.</p>
+        <p class="small mt-4"><b>Proposal:</b> Player Portal 800 HP (invulnerable until Activate starts); Enemy Portal 1500 HP with 90s respawn elsewhere.</p>
+      </div>
+      <div class="card">
+        <div class="label">Q4 · Tone preservation</div>
+        <p>New systems are hardcore-adjacent. How to keep the Party-Game meme vibe?</p>
+        <p class="small mt-4"><b>Proposal:</b> Meme-y item names/SFX, goofy enemy death animations, emotes. Commit to tone in VFX + audio direction.</p>
+      </div>
+    </div>
+  </div>
+</main>
+
+<!-- =================== TASK BOARD =================== -->
+<main class="page wide hidden" data-tab="tasks">
+  <div class="page-header">
+    <div class="kicker">Task Board · 4 contributors</div>
+    <h1>Per-Person Task Board</h1>
+    <p>Grouped by role, color-coded by phase. Use the filter to focus on a single phase. Each task maps to a system in the Design Doc and a bar on the Roadmap Gantt.</p>
+  </div>
+
+  <div class="board-controls">
+    <div class="phase-filter">
+      <button class="active" data-phase="all">All phases</button>
+      <button data-phase="1">P1 · Vertical Slice</button>
+      <button data-phase="2">P2 · Core Hardening</button>
+      <button data-phase="3">P3 · Content 1</button>
+      <button data-phase="4">P4 · Content 2</button>
+      <button data-phase="5">P5 · Polish</button>
+      <button data-phase="6">P6 · Ship</button>
+    </div>
+    <div class="sync-controls">
+      <span id="sync-pill" class="sync-pill sync-syncing">Connecting…</span>
+      <span id="sync-user" class="small mono-cell" style="color:var(--ink-3)"></span>
+      <button class="reset-btn" id="refresh-now-btn">↻ Refresh</button>
+      <button class="reset-btn" id="change-name-btn">Change name</button>
+    </div>
+  </div>
+  <div class="small" style="margin-bottom:12px;color:var(--ink-3)">☁️ Live-synced with Google Sheets. Status + notes are shared across the team; auto-refresh every 30s.</div>
+
+  <div class="board" id="board"></div>
+
+  <div class="note mt-8">
+    <b>Priority legend.</b> <code>P0</code> = blocker / on critical path. <code>P1</code> = important, schedule-able within phase. <code>P2</code> = nice-to-have; first to cut if the phase slips. Rebalance priorities at the end of each phase gate.
+  </div>
+</main>
+
+<script src="data.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
