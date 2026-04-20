@@ -575,6 +575,14 @@
         if(n){ try{ localStorage.setItem(USER_KEY, n); }catch(e){} updateSyncPill(); }
       });
     }
+    // team button
+    const teamBtn = qs('#team-btn');
+    if(teamBtn){
+      teamBtn.addEventListener('click', () => {
+        if(!userName){ alert('Set your name first (click "Change name").'); return; }
+        openTeamModal();
+      });
+    }
 
     // kick off initial fetch + polling
     fetchAll();
