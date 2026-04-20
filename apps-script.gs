@@ -1,21 +1,28 @@
-// Reference copy of the Google Apps Script backing the Task Board.
+// Reference copy of the Google Apps Script backing the Task Board + Design Doc.
 // Deployed from the Google Sheet:
 //   https://docs.google.com/spreadsheets/d/1Od7n8hbOO24SIJiyGR7ctfYTkkLdUXLVf06KiUCY0hQ/edit
 // This file is NOT loaded by the site — it's a mirror so the script is version-controlled.
 // To change behavior: edit in Apps Script editor (Extensions → Apps Script on the sheet),
 // then Deploy → Manage deployments → New version → Deploy. Update this file to match.
 
-const TASKS_SHEET  = 'Tasks';
-const TEAM_SHEET   = 'Team';
-const CONFIG_SHEET = 'Config'; // private — NEVER returned in GET
+const TASKS_SHEET      = 'Tasks';
+const TEAM_SHEET       = 'Team';
+const CHARACTERS_SHEET = 'Characters';
+const ITEMS_SHEET      = 'Items';
+const MAPS_SHEET       = 'Maps';
+const SYSTEMS_SHEET    = 'Systems';
+const CONFIG_SHEET     = 'Config'; // private — NEVER returned in GET
 
 function doGet(e) {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
-  // Only tasks/team are exposed. Config is intentionally omitted.
   return jsonOut({
     ok: true,
-    tasks: readTab(ss.getSheetByName(TASKS_SHEET)),
-    team:  readTab(ss.getSheetByName(TEAM_SHEET)),
+    tasks:      readTab(ss.getSheetByName(TASKS_SHEET)),
+    team:       readTab(ss.getSheetByName(TEAM_SHEET)),
+    characters: readTab(ss.getSheetByName(CHARACTERS_SHEET)),
+    items:      readTab(ss.getSheetByName(ITEMS_SHEET)),
+    maps:       readTab(ss.getSheetByName(MAPS_SHEET)),
+    systems:    readTab(ss.getSheetByName(SYSTEMS_SHEET)),
   });
 }
 
@@ -31,8 +38,6 @@ function doPost(e) {
 }
 
 function handleUnlock(body) {
-  // Compares submitted password against Config tab row where Key === 'password'.
-  // Returns only { ok: true, unlocked: <bool> } — password itself never leaves the server.
   const submitted = (body && body.Password != null) ? String(body.Password) : '';
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const sheet = ss.getSheetByName(CONFIG_SHEET);
@@ -57,9 +62,9 @@ function handleUpsert(body) {
   if (!sheet) return jsonOut({ ok: false, error: 'Unknown tab: ' + body.Tab });
   const data = sheet.getDataRange().getValues();
   const headers = data[0];
-  const keyColName = body.Tab === TEAM_SHEET ? 'MemberId' : 'TaskId';
-  const keyCol = headers.indexOf(keyColName);
-  if (keyCol < 0) return jsonOut({ ok: false, error: 'Missing key column: ' + keyColName });
+  // First column is always the primary key by convention.
+  const keyColName = headers[0];
+  const keyCol = 0;
 
   const now = new Date().toISOString();
   const updatedBy = body.UpdatedBy || '';
@@ -72,7 +77,6 @@ function handleUpsert(body) {
   }
 
   if (rowIdx === -1) {
-    // append new row
     const row = headers.map(h => {
       if (h === keyColName) return body.Key;
       if (h === 'CreatedAt') return now;
@@ -86,7 +90,6 @@ function handleUpsert(body) {
     });
     sheet.appendRow(row);
   } else {
-    // update only provided fields, always stamp UpdatedAt/UpdatedBy
     headers.forEach((h, i) => {
       if (h === 'UpdatedAt') { sheet.getRange(rowIdx, i + 1).setValue(now); return; }
       if (h === 'UpdatedBy') { sheet.getRange(rowIdx, i + 1).setValue(updatedBy); return; }
@@ -104,19 +107,25 @@ function handleBootstrap(body) {
   }
   try {
     const ss = SpreadsheetApp.getActiveSpreadsheet();
-    const tasks = ss.getSheetByName(TASKS_SHEET);
-    const team  = ss.getSheetByName(TEAM_SHEET);
-    if (!tasks || !team) return jsonOut({ ok: false, error: 'Tabs Tasks/Team must exist' });
-
-    const tasksHasData = tasks.getLastRow() > 1;
-    const teamHasData  = team.getLastRow()  > 1;
-    if (tasksHasData || teamHasData) {
-      return jsonOut({ ok: true, seeded: false });
-    }
-
-    writeRows(tasks, body.Tasks || []);
-    writeRows(team,  body.Team  || []);
-    return jsonOut({ ok: true, seeded: true });
+    const seedMap = {
+      Tasks:      body.Tasks,
+      Team:       body.Team,
+      Characters: body.Characters,
+      Items:      body.Items,
+      Maps:       body.Maps,
+      Systems:    body.Systems,
+    };
+    const seeded = {};
+    Object.keys(seedMap).forEach(name => {
+      const rows = seedMap[name];
+      if (!rows || !rows.length) return;
+      const sheet = ss.getSheetByName(name);
+      if (!sheet) return;
+      if (sheet.getLastRow() > 1) { seeded[name] = false; return; }
+      writeRows(sheet, rows);
+      seeded[name] = true;
+    });
+    return jsonOut({ ok: true, seeded });
   } finally {
     lock.releaseLock();
   }
