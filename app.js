@@ -369,16 +369,47 @@
       setSyncStatus('ok');
       // Optimistic local update so UI doesn't wait on next poll
       const nowIso = new Date().toISOString();
+      const stamp = { UpdatedAt: nowIso, UpdatedBy: userName || 'anonymous' };
       if(tab === 'Tasks'){
         const i = taskState.findIndex(t => t.TaskId === key);
-        const patch = Object.assign({}, fields, { UpdatedAt: nowIso, UpdatedBy: userName || 'anonymous' });
+        const patch = Object.assign({}, fields, stamp);
         if(i >= 0) taskState[i] = Object.assign({}, taskState[i], patch);
         else taskState.push(Object.assign({ TaskId: key, CreatedAt: nowIso }, patch));
       } else if(tab === 'Team'){
         const i = teamState.findIndex(m => m.MemberId === key);
-        const patch = Object.assign({}, fields, { UpdatedAt: nowIso, UpdatedBy: userName || 'anonymous' });
+        const patch = Object.assign({}, fields, stamp);
         if(i >= 0) teamState[i] = Object.assign({}, teamState[i], patch);
         else teamState.push(Object.assign({ MemberId: key }, patch));
+      } else if(tab === 'Characters'){
+        const i = charactersState.findIndex(c => c.Id === key);
+        // AbilitiesJson → abilities array for renderCharacters
+        let abilities;
+        if (fields.AbilitiesJson !== undefined){
+          try { const p = JSON.parse(fields.AbilitiesJson); abilities = Array.isArray(p) ? p : []; }
+          catch(e){ abilities = []; }
+        } else if (i >= 0){
+          abilities = charactersState[i].abilities;
+        } else {
+          abilities = [];
+        }
+        const patch = Object.assign({}, fields, { abilities }, stamp);
+        if(i >= 0) charactersState[i] = Object.assign({}, charactersState[i], patch);
+        else charactersState.push(Object.assign({ Id: key, CreatedAt: nowIso }, patch));
+      } else if(tab === 'Items'){
+        const i = itemsState.findIndex(x => x.Id === key);
+        const patch = Object.assign({}, fields, stamp);
+        if(i >= 0) itemsState[i] = Object.assign({}, itemsState[i], patch);
+        else itemsState.push(Object.assign({ Id: key, CreatedAt: nowIso }, patch));
+      } else if(tab === 'Maps'){
+        const i = mapsState.findIndex(x => x.Id === key);
+        const patch = Object.assign({}, fields, stamp);
+        if(i >= 0) mapsState[i] = Object.assign({}, mapsState[i], patch);
+        else mapsState.push(Object.assign({ Id: key, CreatedAt: nowIso }, patch));
+      } else if(tab === 'Systems'){
+        const i = systemsState.findIndex(x => x.Id === key);
+        const patch = Object.assign({}, fields, stamp);
+        if(i >= 0) systemsState[i] = Object.assign({}, systemsState[i], patch);
+        else systemsState.push(Object.assign({ Id: key, CreatedAt: nowIso }, patch));
       }
     }catch(err){
       console.warn('[sync] push error:', err);
@@ -1138,6 +1169,7 @@
         }
         closeModal();
         await pushRow('Systems', key, fields);
+        renderSystems();
         fetchAll();
       });
       if(!isNew){
@@ -1154,6 +1186,7 @@
           qs('[data-action="confirm-delete"]', footer).addEventListener('click', async () => {
             closeModal();
             await pushRow('Systems', s.Id, { Hidden: true });
+            renderSystems();
             fetchAll();
           });
         });
@@ -1259,6 +1292,7 @@
         }
         closeModal();
         await pushRow('Characters', key, fields);
+        renderCharacters();
         fetchAll();
       });
       if(!isNew){
@@ -1275,6 +1309,7 @@
           qs('[data-action="confirm-delete"]', footer).addEventListener('click', async () => {
             closeModal();
             await pushRow('Characters', c.Id, { Hidden: true });
+            renderCharacters();
             fetchAll();
           });
         });
@@ -1329,6 +1364,7 @@
         }
         closeModal();
         await pushRow('Maps', key, fields);
+        renderMaps();
         fetchAll();
       });
       if(!isNew){
@@ -1345,6 +1381,7 @@
           qs('[data-action="confirm-delete"]', footer).addEventListener('click', async () => {
             closeModal();
             await pushRow('Maps', m.Id, { Hidden: true });
+            renderMaps();
             fetchAll();
           });
         });
@@ -1403,6 +1440,7 @@
         }
         closeModal();
         await pushRow('Items', key, fields);
+        renderItems();
         fetchAll();
       });
       if(!isNew){
@@ -1419,6 +1457,7 @@
           qs('[data-action="confirm-delete"]', footer).addEventListener('click', async () => {
             closeModal();
             await pushRow('Items', it.Id, { Hidden: true });
+            renderItems();
             fetchAll();
           });
         });
