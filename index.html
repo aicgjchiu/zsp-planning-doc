@@ -356,25 +356,50 @@
 
 <div id="modal-root"></div>
 <script>
-// Password gate — unlock wiring. Runs on DOMContentLoaded if gate is active.
+// Password gate — unlock via server-side check against the Config tab in the
+// backing Google Sheet. No password literal lives in this file. Runs on
+// DOMContentLoaded if the gate is active.
 (function(){
   if (!document.documentElement.classList.contains('zsp-locked')) return;
+  var ENDPOINT = 'https://script.google.com/macros/s/AKfycbypjQj-_CrxjEovmHt5vzc0Iaysbwt3n0MglkG7MAsDMJII8B8YCqFOBM6eE4GKAFuc/exec';
   document.addEventListener('DOMContentLoaded', function(){
     var input = document.getElementById('zsp-lock-input');
     var btn   = document.getElementById('zsp-lock-submit');
     var err   = document.getElementById('zsp-lock-err');
     if (!input || !btn) return;
     setTimeout(function(){ input.focus(); }, 50);
-    function check(){
-      if (input.value === 'AICGZSP') {
-        try { localStorage.setItem('zsp_unlocked', '1'); } catch(e) {}
-        document.documentElement.classList.remove('zsp-locked');
-        var g = document.getElementById('zsp-lock-gate');
-        if (g) g.remove();
-      } else {
+    var busy = false;
+    function setBusy(v){
+      busy = v;
+      btn.disabled = v;
+      btn.textContent = v ? 'Checking…' : 'Unlock';
+    }
+    async function check(){
+      if (busy) return;
+      err.textContent = '';
+      setBusy(true);
+      try {
+        var res = await fetch(ENDPOINT, {
+          method: 'POST',
+          headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+          body: JSON.stringify({ Action: 'unlock', Password: input.value }),
+        });
+        var json = await res.json();
+        if (!json.ok) throw new Error(json.error || 'Unknown error');
+        if (json.unlocked) {
+          try { localStorage.setItem('zsp_unlocked', '1'); } catch(e) {}
+          document.documentElement.classList.remove('zsp-locked');
+          var g = document.getElementById('zsp-lock-gate');
+          if (g) g.remove();
+          return;
+        }
         err.textContent = 'Wrong password';
         input.value = '';
         input.focus();
+      } catch (e) {
+        err.textContent = 'Network error — try again';
+      } finally {
+        if (document.documentElement.classList.contains('zsp-locked')) setBusy(false);
       }
     }
     btn.addEventListener('click', check);

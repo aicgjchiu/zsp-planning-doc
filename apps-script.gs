@@ -5,11 +5,13 @@
 // To change behavior: edit in Apps Script editor (Extensions → Apps Script on the sheet),
 // then Deploy → Manage deployments → New version → Deploy. Update this file to match.
 
-const TASKS_SHEET = 'Tasks';
-const TEAM_SHEET  = 'Team';
+const TASKS_SHEET  = 'Tasks';
+const TEAM_SHEET   = 'Team';
+const CONFIG_SHEET = 'Config'; // private — NEVER returned in GET
 
 function doGet(e) {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
+  // Only tasks/team are exposed. Config is intentionally omitted.
   return jsonOut({
     ok: true,
     tasks: readTab(ss.getSheetByName(TASKS_SHEET)),
@@ -21,10 +23,32 @@ function doPost(e) {
   try {
     const body = JSON.parse(e.postData.contents);
     if (body.Action === 'bootstrap') return handleBootstrap(body);
+    if (body.Action === 'unlock')    return handleUnlock(body);
     return handleUpsert(body);
   } catch (err) {
     return jsonOut({ ok: false, error: String(err) });
   }
+}
+
+function handleUnlock(body) {
+  // Compares submitted password against Config tab row where Key === 'password'.
+  // Returns only { ok: true, unlocked: <bool> } — password itself never leaves the server.
+  const submitted = (body && body.Password != null) ? String(body.Password) : '';
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sheet = ss.getSheetByName(CONFIG_SHEET);
+  if (!sheet) return jsonOut({ ok: false, error: 'Config tab missing' });
+  const data = sheet.getDataRange().getValues();
+  if (data.length < 2) return jsonOut({ ok: false, error: 'Config empty' });
+  const headers = data[0];
+  const keyCol = headers.indexOf('Key');
+  const valCol = headers.indexOf('Value');
+  if (keyCol < 0 || valCol < 0) return jsonOut({ ok: false, error: 'Config headers must be Key|Value' });
+  let expected = null;
+  for (let i = 1; i < data.length; i++) {
+    if (String(data[i][keyCol]) === 'password') { expected = String(data[i][valCol]); break; }
+  }
+  if (expected == null) return jsonOut({ ok: false, error: 'password row missing in Config' });
+  return jsonOut({ ok: true, unlocked: submitted === expected });
 }
 
 function handleUpsert(body) {
