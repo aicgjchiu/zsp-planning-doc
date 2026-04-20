@@ -390,3 +390,41 @@ html.zsp-locked body > *:not(#zsp-lock-gate) { display: none !important; }
 }
 #zsp-lock-gate button:hover { background: oklch(0.6 0.12 240); }
 #zsp-lock-gate .lock-err { color: oklch(0.62 0.2 25); font-size: 12px; min-height: 14px; }
+
+/* ---- Design Doc edit affordances ---- */
+.section-add { margin-left: 12px; display: inline-flex; }
+.section-add button {
+  background: transparent; border: 1px solid #ddd; border-radius: 4px;
+  width: 24px; height: 24px; padding: 0; cursor: pointer;
+  font-size: 14px; line-height: 1; color: var(--ink-2);
+}
+.section-add button:disabled { opacity: 0.4; cursor: not-allowed; }
+
+/* ⋯ button inside a design-doc card (.card) */
+.card .card-menu-btn {
+  position: absolute; top: 10px; right: 10px;
+  background: transparent; border: 1px solid #ddd; border-radius: 4px;
+  width: 24px; height: 24px; padding: 0; cursor: pointer;
+  font-size: 14px; line-height: 1; color: var(--ink-2);
+}
+.card { position: relative; }
+.card .card-menu-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+/* ⋯ button inside a design-doc table row */
+.row-menu-btn {
+  background: transparent; border: 1px solid #ddd; border-radius: 4px;
+  width: 22px; height: 22px; padding: 0; cursor: pointer;
+  font-size: 12px; line-height: 1; color: var(--ink-2);
+}
+.row-menu-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+/* Abilities sub-table inside the Character modal */
+.abilities-subtable { width: 100%; border-collapse: collapse; font-size: 12px; }
+.abilities-subtable th, .abilities-subtable td { padding: 4px 6px; vertical-align: top; border-bottom: 1px solid #eee; }
+.abilities-subtable th { text-align: left; font-weight: 600; color: #666; }
+.abilities-subtable td.key-cell { font-family: var(--mono); font-weight: 600; text-align: center; width: 28px; }
+.abilities-subtable input[type=text], .abilities-subtable select, .abilities-subtable textarea {
+  width: 100%; box-sizing: border-box; font: inherit;
+  padding: 3px 5px; border: 1px solid #ddd; border-radius: 4px; background: #fff; color: #111;
+}
+.abilities-subtable textarea { min-height: 44px; resize: vertical; }
