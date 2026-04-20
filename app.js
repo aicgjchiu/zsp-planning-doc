@@ -242,27 +242,19 @@
     return userName;
   }
 
-  async function fetchRemote(){
+  async function fetchAll(){
     setSyncStatus('syncing');
     try{
       const res = await fetch(SHEET_ENDPOINT, { method:'GET' });
       const json = await res.json();
       if(!json.ok) throw new Error(json.error || 'fetch failed');
-      const map = {};
-      (json.rows || []).forEach(r=>{
-        if(r.TaskId){
-          map[r.TaskId] = {
-            Status: r.Status || 'todo',
-            Notes: r.Notes || '',
-            Assignee: r.Assignee || '',
-            UpdatedAt: r.UpdatedAt || '',
-            UpdatedBy: r.UpdatedBy || '',
-          };
-        }
-      });
-      remoteState = map;
+      taskState = (json.tasks || []).map(normalizeTaskRow);
+      teamState = (json.team  || []).map(normalizeTeamRow);
       lastSyncAt = new Date();
       setSyncStatus('ok');
+      if(teamState.length === 0 && taskState.length === 0){
+        await bootstrapIfEmpty();
+      }
       renderBoard();
     }catch(err){
       console.warn('[sync] fetch error:', err);
@@ -270,12 +262,11 @@
     }
   }
 
-  async function pushUpdate(taskId, patch){
+  async function pushRow(tab, key, fields){
     pendingWrites++;
     updateSyncPill();
     try{
-      const body = Object.assign({ TaskId: taskId, UpdatedBy: getUserName() }, patch);
-      // Apps Script web apps require a simple request — use text/plain to avoid CORS preflight
+      const body = { Tab: tab, Key: key, Fields: fields, UpdatedBy: userName || 'anonymous' };
       const res = await fetch(SHEET_ENDPOINT, {
         method: 'POST',
         headers: { 'Content-Type': 'text/plain;charset=utf-8' },
@@ -283,13 +274,21 @@
       });
       const json = await res.json();
       if(!json.ok) throw new Error(json.error || 'push failed');
-      // Merge locally so we don't have to re-fetch
-      remoteState[taskId] = Object.assign({}, remoteState[taskId] || {}, patch, {
-        UpdatedAt: new Date().toISOString(),
-        UpdatedBy: getUserName(),
-      });
       lastSyncAt = new Date();
       setSyncStatus('ok');
+      // Optimistic local update so UI doesn't wait on next poll
+      const nowIso = new Date().toISOString();
+      if(tab === 'Tasks'){
+        const i = taskState.findIndex(t => t.TaskId === key);
+        const patch = Object.assign({}, fields, { UpdatedAt: nowIso, UpdatedBy: userName || 'anonymous' });
+        if(i >= 0) taskState[i] = Object.assign({}, taskState[i], patch);
+        else taskState.push(Object.assign({ TaskId: key, CreatedAt: nowIso }, patch));
+      } else if(tab === 'Team'){
+        const i = teamState.findIndex(m => m.MemberId === key);
+        const patch = Object.assign({}, fields, { UpdatedAt: nowIso, UpdatedBy: userName || 'anonymous' });
+        if(i >= 0) teamState[i] = Object.assign({}, teamState[i], patch);
+        else teamState.push(Object.assign({ MemberId: key }, patch));
+      }
     }catch(err){
       console.warn('[sync] push error:', err);
       setSyncStatus('error');
@@ -298,6 +297,35 @@
       pendingWrites--;
       updateSyncPill();
     }
+  }
+
+  function normalizeTaskRow(r){
+    return {
+      TaskId:    String(r.TaskId || ''),
+      MemberId:  String(r.MemberId || ''),
+      Title:     String(r.Title || ''),
+      Body:      String(r.Body || ''),
+      Phase:     Number(r.Phase) || 1,
+      Priority:  String(r.Priority || 'P1'),
+      Status:    String(r.Status || 'todo'),
+      Notes:     String(r.Notes || ''),
+      Assignee:  String(r.Assignee || ''),
+      Hidden:    r.Hidden === true || r.Hidden === 'TRUE' || r.Hidden === 'true',
+      SortOrder: Number(r.SortOrder) || 0,
+      CreatedAt: String(r.CreatedAt || ''),
+      UpdatedAt: String(r.UpdatedAt || ''),
+      UpdatedBy: String(r.UpdatedBy || ''),
+    };
+  }
+  function normalizeTeamRow(r){
+    return {
+      MemberId:  String(r.MemberId || ''),
+      Name:      String(r.Name || ''),
+      RoleKey:   String(r.RoleKey || 'programmer'),
+      RoleLabel: String(r.RoleLabel || ''),
+      Order:     Number(r.Order) || 0,
+      Active:    r.Active !== false && r.Active !== 'FALSE' && r.Active !== 'false',
+    };
   }
 
   function setSyncStatus(s){ syncStatus = s; updateSyncPill(); }
@@ -482,7 +510,7 @@
     }
     // refresh now button
     const refreshBtn = qs('#refresh-now-btn');
-    if(refreshBtn){ refreshBtn.addEventListener('click', ()=>fetchRemote()); }
+    if(refreshBtn){ refreshBtn.addEventListener('click', ()=>fetchAll()); }
     // change name button
     const nameBtn = qs('#change-name-btn');
     if(nameBtn){
@@ -494,8 +522,8 @@
     }
 
     // kick off initial fetch + polling
-    fetchRemote();
-    setInterval(fetchRemote, POLL_MS);
+    fetchAll();
+    setInterval(fetchAll, POLL_MS);
     // update the "synced Xs ago" pill every second
     setInterval(updateSyncPill, 1000);
   }
