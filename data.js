@@ -84,7 +84,7 @@ window.ITEMS = [
 window.MAPS = [
   {
     id: 'hamlet',
-    name: 'The Hamlet · 靜村',
+    name: 'NightMarket · 夜市',
     theme: 'Chinese countryside at dusk — Jiangshi 殭屍 themed',
     size: '250m × 250m',
     enemies: 'Jiangshi 殭屍, Yao 狐妖 (fox spirits), Black Dog 黑狗',
@@ -94,7 +94,7 @@ window.MAPS = [
   },
   {
     id: 'monastery',
-    name: 'Snowfall Monastery · 雪山修道院',
+    name: 'map2',
     theme: 'Medieval Alpine monastery on a snowy night — werewolves and plague revenants',
     size: '300m × 300m',
     enemies: 'Werewolves 狼人, Cultists 邪教徒, Plague Revenants 瘟疫亡魂',
@@ -104,7 +104,7 @@ window.MAPS = [
   },
   {
     id: 'bayou',
-    name: 'Drowned Bayou · 瘴氣沼澤',
+    name: 'map3',
     theme: 'Louisiana voodoo swamp at night — voodoo zombies and Loa idols',
     size: '320m × 320m',
     enemies: 'Bayou Zombies 巫毒殭屍, Loa Marionettes 羅阿神偶 (voodoo idols hung on invisible strings), Gator Fiend 鱷魚惡魔',
@@ -114,7 +114,7 @@ window.MAPS = [
   },
   {
     id: 'steppe',
-    name: 'Endless Steppe · 無盡草原',
+    name: 'map4',
     theme: 'Mongolian steppe with an abandoned shaman shrine — shaman spirits gone feral',
     size: '400m × 400m',
     enemies: 'Spirit Wolves 靈狼, Ancestor Warriors 先祖戰士 (spectral), Stone Giants 石巨人',
