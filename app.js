@@ -232,13 +232,12 @@
     return `${colKey}-p${t.phase}-${t.p}-${slug}-${idx}`;
   }
   function getUserName(){
-    let n = '';
-    try{ n = localStorage.getItem(USER_KEY) || ''; }catch(e){}
-    if(!n){
-      n = (prompt('Your name (shown as "last updated by" on tasks):') || '').trim();
-      if(n){ try{ localStorage.setItem(USER_KEY, n); }catch(e){} }
+    if(userName) return userName;
+    try{ userName = localStorage.getItem(USER_KEY) || ''; }catch(e){}
+    if(!userName){
+      userName = (prompt('Your name (shown as "last updated by" on tasks):') || '').trim();
+      if(userName){ try{ localStorage.setItem(USER_KEY, userName); }catch(e){} }
     }
-    userName = n || '';
     return userName;
   }
 
@@ -256,6 +255,15 @@
         await bootstrapIfEmpty();
       }
       renderBoard();
+      if(!userName){
+        const n = (prompt('Enter your name — shown on tasks you create or update. You can change it later.') || '').trim();
+        if(n){
+          userName = n;
+          try{ localStorage.setItem(USER_KEY, n); }catch(e){}
+          updateSyncPill();
+          renderBoard();
+        }
+      }
     }catch(err){
       console.warn('[sync] fetch error:', err);
       setSyncStatus('error');
@@ -581,9 +589,14 @@
     const nameBtn = qs('#change-name-btn');
     if(nameBtn){
       nameBtn.addEventListener('click', ()=>{
-        const cur = localStorage.getItem(USER_KEY) || '';
+        const cur = (localStorage.getItem(USER_KEY) || '');
         const n = (prompt('Your name:', cur) || '').trim();
-        if(n){ try{ localStorage.setItem(USER_KEY, n); }catch(e){} updateSyncPill(); }
+        if(n){
+          userName = n;
+          try{ localStorage.setItem(USER_KEY, n); }catch(e){}
+          updateSyncPill();
+          renderBoard();
+        }
       });
     }
     // team button
@@ -596,6 +609,8 @@
     }
 
     // kick off initial fetch + polling
+    // Identity: read from localStorage on load. If not present, prompt after first fetch.
+    try{ userName = localStorage.getItem(USER_KEY) || ''; }catch(e){}
     fetchAll();
     setInterval(fetchAll, POLL_MS);
     // update the "synced Xs ago" pill every second
