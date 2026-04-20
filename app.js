@@ -164,19 +164,31 @@
   function renderMaps(){
     const host = qs('#maps');
     if(!host) return;
-    host.innerHTML = window.MAPS.map((m,i)=>`
-      <div class="card">
-        <div class="label">Map ${String(i+1).padStart(2,'0')} · ${m.difficulty}</div>
-        <h3>${m.name}</h3>
-        <p style="margin:6px 0 12px 0">${m.theme}</p>
+    const canEdit = !!userName;
+    const rows = mapsState
+      .filter(m => !m.Hidden)
+      .slice()
+      .sort((a,b) => a.SortOrder - b.SortOrder);
+    host.innerHTML = rows.map((m, i) => `
+      <div class="card" data-map-id="${escapeAttr(m.Id)}">
+        <button class="card-menu-btn" data-map-id="${escapeAttr(m.Id)}" ${canEdit?'':'disabled title="Set your name first"'}>⋯</button>
+        <div class="label">Map ${String(i+1).padStart(2,'0')} · ${escapeHtml(m.Difficulty)}</div>
+        <h3>${escapeHtml(m.Name)}</h3>
+        <p style="margin:6px 0 12px 0">${escapeHtml(m.Theme)}</p>
         <dl class="kv">
-          <dt>Size</dt><dd class="mono-cell">${m.size}</dd>
-          <dt>Enemies</dt><dd>${m.enemies}</dd>
-          <dt>Boss</dt><dd>${m.boss}</dd>
-          <dt>Layout</dt><dd style="font-size:12.5px;color:var(--ink-2)">${m.biomeNotes}</dd>
+          <dt>Size</dt><dd class="mono-cell">${escapeHtml(m.Size)}</dd>
+          <dt>Enemies</dt><dd>${escapeHtml(m.Enemies)}</dd>
+          <dt>Boss</dt><dd>${escapeHtml(m.Boss)}</dd>
+          <dt>Layout</dt><dd style="font-size:12.5px;color:var(--ink-2)">${escapeHtml(m.BiomeNotes)}</dd>
         </dl>
       </div>
     `).join('');
+    qsa('.card-menu-btn', host).forEach(btn => {
+      btn.addEventListener('click', () => {
+        if(btn.disabled) return;
+        openMapModal(btn.getAttribute('data-map-id'));
+      });
+    });
   }
 
   // --- Render: Systems ---
@@ -1139,7 +1151,76 @@
   }
 
   function openCharacterModal(id){ alert('Character editor coming in Stage C.'); }
-  function openMapModal(id){ alert('Map editor coming in Stage B.'); }
+  function openMapModal(id){
+    const isNew = !id;
+    const m = isNew
+      ? { Id:'', Name:'', Theme:'', Size:'', Enemies:'', Boss:'', Difficulty:'Run 2', BiomeNotes:'', Hidden:false, SortOrder:0 }
+      : mapsState.find(x => x.Id === id);
+    if(!m){ alert('Map not found.'); return; }
+
+    const difOpts = MAP_DIFFICULTIES.map(o => `<option value="${o.v}" ${m.Difficulty===o.v?'selected':''}>${escapeHtml(o.label)}</option>`).join('');
+
+    const html = `
+      <div class="modal-panel" data-panel style="max-width:640px">
+        <h3>${isNew?'Add Map':'Edit Map'}</h3>
+        <label>Name<input type="text" data-f="Name" value="${escapeAttr(m.Name)}" placeholder="e.g. NightMarket · 夜市"></label>
+        <div class="modal-row">
+          <label>Size<input type="text" data-f="Size" value="${escapeAttr(m.Size)}" placeholder="e.g. 250m × 250m"></label>
+          <label>Difficulty<select data-f="Difficulty">${difOpts}</select></label>
+        </div>
+        <label>Theme<textarea data-f="Theme">${escapeHtml(m.Theme)}</textarea></label>
+        <label>Enemies<textarea data-f="Enemies">${escapeHtml(m.Enemies)}</textarea></label>
+        <label>Boss<input type="text" data-f="Boss" value="${escapeAttr(m.Boss)}"></label>
+        <label>Biome / Layout notes<textarea data-f="BiomeNotes">${escapeHtml(m.BiomeNotes)}</textarea></label>
+        <div class="modal-footer">
+          ${isNew ? '' : '<button class="modal-btn danger" data-action="delete">Delete</button>'}
+          <div class="right">
+            <button class="modal-btn" data-action="cancel">Cancel</button>
+            <button class="modal-btn primary" data-action="save">${isNew?'Create':'Save'}</button>
+          </div>
+        </div>
+      </div>
+    `;
+    openModal(html, (root) => {
+      const panel = qs('[data-panel]', root);
+      qs('[data-action="cancel"]', panel).addEventListener('click', closeModal);
+      qs('[data-action="save"]', panel).addEventListener('click', async () => {
+        const fields = {};
+        qsa('[data-f]', panel).forEach(el => { fields[el.getAttribute('data-f')] = el.value; });
+        if(!fields.Name || !String(fields.Name).trim()){
+          alert('Name is required.');
+          return;
+        }
+        const key = isNew ? genId('map') : m.Id;
+        if(isNew){
+          const maxSo = mapsState.reduce((acc,x) => Math.max(acc, x.SortOrder), 0);
+          fields.SortOrder = maxSo + 1000;
+          fields.Hidden = false;
+        }
+        closeModal();
+        await pushRow('Maps', key, fields);
+        fetchAll();
+      });
+      if(!isNew){
+        qs('[data-action="delete"]', panel).addEventListener('click', () => {
+          const footer = qs('.modal-footer', panel);
+          footer.innerHTML = `
+            <div class="modal-confirm-inline">
+              Hide this map? Recoverable from the sheet.
+              <button class="modal-btn danger" data-action="confirm-delete">Yes, hide</button>
+              <button class="modal-btn" data-action="cancel-delete">No</button>
+            </div>
+          `;
+          qs('[data-action="cancel-delete"]', footer).addEventListener('click', closeModal);
+          qs('[data-action="confirm-delete"]', footer).addEventListener('click', async () => {
+            closeModal();
+            await pushRow('Maps', m.Id, { Hidden: true });
+            fetchAll();
+          });
+        });
+      }
+    });
+  }
   function openItemModal(id){
     const isNew = !id;
     const it = isNew
