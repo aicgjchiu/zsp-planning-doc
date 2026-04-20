@@ -359,3 +359,34 @@ hr.soft{border:none;border-top:1px solid var(--line);margin:22px 0}
 /* ---- Legend row ---- */
 .legend-row { font-size: 11.5px; color: #888; padding: 6px 0 4px; }
 .legend-row b { color: #444; }
+
+/* ---- Password gate (cosmetic only) ---- */
+#zsp-lock-gate { display: none; }
+html.zsp-locked #zsp-lock-gate {
+  display: flex; position: fixed; inset: 0; z-index: 99999;
+  background: oklch(0.15 0.01 260); color: #fff;
+  align-items: center; justify-content: center;
+  font-family: 'Inter', sans-serif;
+}
+html.zsp-locked body > *:not(#zsp-lock-gate) { display: none !important; }
+#zsp-lock-gate .lock-panel {
+  width: 100%; max-width: 360px; padding: 32px;
+  background: oklch(0.22 0.01 260); border-radius: 10px;
+  display: flex; flex-direction: column; gap: 14px; text-align: center;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+}
+#zsp-lock-gate h2 { margin: 0; font-size: 20px; font-weight: 600; }
+#zsp-lock-gate p { margin: 0; color: oklch(0.7 0.01 260); font-size: 13px; }
+#zsp-lock-gate input {
+  font: inherit; padding: 10px 12px;
+  border: 1px solid oklch(0.3 0.01 260); border-radius: 6px;
+  background: oklch(0.12 0.01 260); color: #fff;
+  box-sizing: border-box;
+}
+#zsp-lock-gate input:focus { outline: 2px solid oklch(0.55 0.12 240); outline-offset: -1px; }
+#zsp-lock-gate button {
+  font: inherit; padding: 10px 14px; border-radius: 6px; border: 0;
+  background: oklch(0.55 0.12 240); color: #fff; cursor: pointer;
+}
+#zsp-lock-gate button:hover { background: oklch(0.6 0.12 240); }
+#zsp-lock-gate .lock-err { color: oklch(0.62 0.2 25); font-size: 12px; min-height: 14px; }

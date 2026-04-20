@@ -8,8 +8,29 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="styles.css"/>
+<script>
+// Cosmetic password gate — runs before <body> paints to avoid flash.
+// Real security would require server-side auth; this is a deterrent only.
+(function(){
+  try {
+    if (localStorage.getItem('zsp_unlocked') !== '1') {
+      document.documentElement.classList.add('zsp-locked');
+    }
+  } catch(e) {}
+})();
+</script>
 </head>
 <body>
+
+<div id="zsp-lock-gate">
+  <div class="lock-panel">
+    <h2>ZSP · Planning Doc</h2>
+    <p>This document is private. Enter the password to continue.</p>
+    <input id="zsp-lock-input" type="password" placeholder="Password" autocomplete="off">
+    <button id="zsp-lock-submit">Unlock</button>
+    <div class="lock-err" id="zsp-lock-err"></div>
+  </div>
+</div>
 
 <div class="topbar">
   <div class="brand"><b>ZSP</b> · Portal Pivot · Planning Doc</div>
@@ -334,6 +355,33 @@
 </main>
 
 <div id="modal-root"></div>
+<script>
+// Password gate — unlock wiring. Runs on DOMContentLoaded if gate is active.
+(function(){
+  if (!document.documentElement.classList.contains('zsp-locked')) return;
+  document.addEventListener('DOMContentLoaded', function(){
+    var input = document.getElementById('zsp-lock-input');
+    var btn   = document.getElementById('zsp-lock-submit');
+    var err   = document.getElementById('zsp-lock-err');
+    if (!input || !btn) return;
+    setTimeout(function(){ input.focus(); }, 50);
+    function check(){
+      if (input.value === 'AICGZSP') {
+        try { localStorage.setItem('zsp_unlocked', '1'); } catch(e) {}
+        document.documentElement.classList.remove('zsp-locked');
+        var g = document.getElementById('zsp-lock-gate');
+        if (g) g.remove();
+      } else {
+        err.textContent = 'Wrong password';
+        input.value = '';
+        input.focus();
+      }
+    }
+    btn.addEventListener('click', check);
+    input.addEventListener('keydown', function(e){ if (e.key === 'Enter') check(); });
+  });
+})();
+</script>
 <script src="data.js"></script>
 <script src="app.js"></script>
 </body>
