@@ -197,6 +197,28 @@
     { v:'P1', label:'P1 — Should have' },
     { v:'P2', label:'P2 — Nice to have' },
   ];
+  const ABILITY_KEYS = ['Q', 'R', 'T']; // fixed slot count per design
+  const ABILITY_TYPES = [
+    { v:'Skill',    label:'Skill' },
+    { v:'Ultimate', label:'Ultimate' },
+  ];
+  const ABILITY_IMPLS = [
+    { v:'Implemented', label:'Implemented' },
+    { v:'Partial',     label:'Partial' },
+    { v:'Design only', label:'Design only' },
+  ];
+  const MAP_DIFFICULTIES = [
+    { v:'Tutorial map / Run 1', label:'Tutorial map / Run 1' },
+    { v:'Run 2',                label:'Run 2' },
+    { v:'Run 3',                label:'Run 3' },
+    { v:'Final map / Run 4+',   label:'Final map / Run 4+' },
+  ];
+  const SYS_STATUSES = [
+    { v:'In code',     label:'In code' },
+    { v:'Partial',     label:'Partial' },
+    { v:'Not started', label:'Not started' },
+    { v:'Design',      label:'Design' },
+  ];
   const ROLE_KEYS = [
     { v:'programmer', label:'Programmer' },
     { v:'char',       label:'Character Artist' },
@@ -217,12 +239,16 @@
   try{ currentPhaseFilter = localStorage.getItem(TAB_FILTER_KEY_CURRENT) || 'all'; }catch(e){}
 
   // Module state
-  let teamState = [];        // array of { MemberId, Name, RoleKey, RoleLabel, Order, Active, ... }
-  let taskState = [];        // array of task objects from sheet
-  let userName = '';         // cached identity
-  let syncStatus = 'idle';
-  let lastSyncAt = null;
-  let pendingWrites = 0;
+  let teamState       = [];        // array of Team objects
+  let taskState       = [];        // array of Task objects
+  let charactersState = [];        // array of Character objects (AbilitiesJson parsed to .abilities)
+  let itemsState      = [];        // array of Item objects
+  let mapsState       = [];        // array of Map objects
+  let systemsState    = [];        // array of System object
+  let userName        = '';        // cached identity
+  let syncStatus      = 'idle';
+  let lastSyncAt      = null;
+  let pendingWrites   = 0;
 
   function genId(prefix){
     return `${prefix}-${Date.now()}-${Math.floor(Math.random()*1e6).toString(36)}`;
@@ -333,6 +359,77 @@
       RoleLabel: String(r.RoleLabel || ''),
       Order:     Number(r.Order) || 0,
       Active:    r.Active !== false && r.Active !== 'FALSE' && r.Active !== 'false',
+    };
+  }
+  function normalizeCharacterRow(r){
+    let abilities = [];
+    try {
+      const parsed = JSON.parse(r.AbilitiesJson || '[]');
+      if (Array.isArray(parsed)) abilities = parsed;
+    } catch(e) {}
+    return {
+      Id:         String(r.Id || ''),
+      Name:       String(r.Name || ''),
+      Culture:    String(r.Culture || ''),
+      RoleText:   String(r.RoleText || ''),
+      Weapon:     String(r.Weapon || ''),
+      Status:     String(r.Status || ''),
+      StatusChip: String(r.StatusChip || ''),
+      Summary:    String(r.Summary || ''),
+      abilities:  abilities,
+      Hidden:     r.Hidden === true || r.Hidden === 'TRUE' || r.Hidden === 'true',
+      SortOrder:  Number(r.SortOrder) || 0,
+      CreatedAt:  String(r.CreatedAt || ''),
+      UpdatedAt:  String(r.UpdatedAt || ''),
+      UpdatedBy:  String(r.UpdatedBy || ''),
+    };
+  }
+  function normalizeItemRow(r){
+    return {
+      Id:         String(r.Id || ''),
+      Name:       String(r.Name || ''),
+      Kind:       String(r.Kind || ''),
+      Effect:     String(r.Effect || ''),
+      Stack:      Number(r.Stack) || 0,
+      Existing:   r.Existing === true || r.Existing === 'TRUE' || r.Existing === 'true',
+      Notes:      String(r.Notes || ''),
+      Hidden:     r.Hidden === true || r.Hidden === 'TRUE' || r.Hidden === 'true',
+      SortOrder:  Number(r.SortOrder) || 0,
+      CreatedAt:  String(r.CreatedAt || ''),
+      UpdatedAt:  String(r.UpdatedAt || ''),
+      UpdatedBy:  String(r.UpdatedBy || ''),
+    };
+  }
+  function normalizeMapRow(r){
+    return {
+      Id:         String(r.Id || ''),
+      Name:       String(r.Name || ''),
+      Theme:      String(r.Theme || ''),
+      Size:       String(r.Size || ''),
+      Enemies:    String(r.Enemies || ''),
+      Boss:       String(r.Boss || ''),
+      Difficulty: String(r.Difficulty || 'Run 2'),
+      BiomeNotes: String(r.BiomeNotes || ''),
+      Hidden:     r.Hidden === true || r.Hidden === 'TRUE' || r.Hidden === 'true',
+      SortOrder:  Number(r.SortOrder) || 0,
+      CreatedAt:  String(r.CreatedAt || ''),
+      UpdatedAt:  String(r.UpdatedAt || ''),
+      UpdatedBy:  String(r.UpdatedBy || ''),
+    };
+  }
+  function normalizeSystemRow(r){
+    return {
+      Id:         String(r.Id || ''),
+      System:     String(r.System || ''),
+      SysStatus:  String(r.SysStatus || 'Design'),
+      Dep:        String(r.Dep || ''),
+      Owner:      String(r.Owner || ''),
+      Notes:      String(r.Notes || ''),
+      Hidden:     r.Hidden === true || r.Hidden === 'TRUE' || r.Hidden === 'true',
+      SortOrder:  Number(r.SortOrder) || 0,
+      CreatedAt:  String(r.CreatedAt || ''),
+      UpdatedAt:  String(r.UpdatedAt || ''),
+      UpdatedBy:  String(r.UpdatedBy || ''),
     };
   }
 
