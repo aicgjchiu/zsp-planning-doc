@@ -283,6 +283,9 @@
   let itemsState      = [];        // array of Item objects
   let mapsState       = [];        // array of Map objects
   let systemsState    = [];        // array of System object
+  let ganttTracksState = [];       // array of GanttTrack objects
+  let ganttBarsState   = [];       // array of GanttBar objects
+  let milestonesState  = [];       // array of Milestone objects
   let userName        = '';        // cached identity
   let syncStatus      = 'idle';
   let lastSyncAt      = null;
@@ -313,6 +316,9 @@
       itemsState      = (json.items      || []).map(normalizeItemRow);
       mapsState       = (json.maps       || []).map(normalizeMapRow);
       systemsState    = (json.systems    || []).map(normalizeSystemRow);
+      ganttTracksState = (json.ganttTracks || []).map(normalizeGanttTrackRow);
+      ganttBarsState   = (json.ganttBars   || []).map(normalizeGanttBarRow);
+      milestonesState  = (json.milestones  || []).map(normalizeMilestoneRow);
       lastSyncAt = new Date();
       setSyncStatus('ok');
       const anyEmpty =
@@ -336,9 +342,68 @@
           renderBoard();
         }
       }
+      await bootstrapIfEmpty();
     }catch(err){
       console.warn('[sync] fetch error:', err);
       setSyncStatus('error');
+    }
+  }
+
+  async function bootstrapIfEmpty(){
+    // Idempotent: only seeds the three new Roadmap tabs when they're all empty.
+    if(ganttTracksState.length || ganttBarsState.length || milestonesState.length) return;
+    if(!window.GANTT || !window.MILESTONES) return;
+
+    const tracks = [];
+    const bars = [];
+    window.GANTT.forEach((lane, laneIdx) => {
+      // Skip the legacy "Milestones" lane — that data lives in the Milestones tab now.
+      if((lane.role || '').toLowerCase() === 'milestone') return;
+      const trackId = genId('track');
+      tracks.push({
+        TrackId: trackId,
+        Name: lane.who || lane.name || 'Track',
+        Role: lane.role || 'code',
+        Order: laneIdx,
+        Hidden: false,
+        SortOrder: laneIdx,
+      });
+      (lane.bars || []).forEach((b, bi) => {
+        bars.push({
+          BarId: genId('bar'),
+          TrackId: trackId,
+          Name: b.name,
+          Start: b.start,
+          End: b.end,
+          Color: b.color || lane.role || 'code',
+          Hidden: false,
+          SortOrder: bi,
+        });
+      });
+    });
+
+    const milestones = window.MILESTONES.map((m, i) => ({
+      MilestoneId: genId('ms'),
+      Quarter: m.q || m.quarter || '',
+      Name: m.name || '',
+      Goal: m.goal || '',
+      Hidden: false,
+      SortOrder: i,
+    }));
+
+    try{
+      await fetch(SHEET_ENDPOINT, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify({
+          Action: 'bootstrap',
+          UpdatedBy: userName || 'bootstrap',
+          Tabs: { GanttTracks: tracks, GanttBars: bars, Milestones: milestones },
+        }),
+      });
+      await fetchAll();
+    }catch(err){
+      console.warn('[bootstrap] failed:', err);
     }
   }
 
@@ -507,6 +572,47 @@
       CreatedAt:  String(r.CreatedAt || ''),
       UpdatedAt:  String(r.UpdatedAt || ''),
       UpdatedBy:  String(r.UpdatedBy || ''),
+    };
+  }
+  function normalizeGanttTrackRow(r){
+    return {
+      TrackId:   String(r.TrackId || ''),
+      Name:      String(r.Name || ''),
+      Role:      String(r.Role || 'code'),
+      Order:     Number(r.Order) || 0,
+      Hidden:    r.Hidden === true || r.Hidden === 'TRUE' || r.Hidden === 'true',
+      SortOrder: Number(r.SortOrder) || 0,
+      CreatedAt: String(r.CreatedAt || ''),
+      UpdatedAt: String(r.UpdatedAt || ''),
+      UpdatedBy: String(r.UpdatedBy || ''),
+    };
+  }
+  function normalizeGanttBarRow(r){
+    return {
+      BarId:     String(r.BarId || ''),
+      TrackId:   String(r.TrackId || ''),
+      Name:      String(r.Name || ''),
+      Start:     Number(r.Start) || 0,
+      End:       Number(r.End) || 1,
+      Color:     String(r.Color || 'code'),
+      Hidden:    r.Hidden === true || r.Hidden === 'TRUE' || r.Hidden === 'true',
+      SortOrder: Number(r.SortOrder) || 0,
+      CreatedAt: String(r.CreatedAt || ''),
+      UpdatedAt: String(r.UpdatedAt || ''),
+      UpdatedBy: String(r.UpdatedBy || ''),
+    };
+  }
+  function normalizeMilestoneRow(r){
+    return {
+      MilestoneId: String(r.MilestoneId || ''),
+      Quarter:     String(r.Quarter || ''),
+      Name:        String(r.Name || ''),
+      Goal:        String(r.Goal || ''),
+      Hidden:      r.Hidden === true || r.Hidden === 'TRUE' || r.Hidden === 'true',
+      SortOrder:   Number(r.SortOrder) || 0,
+      CreatedAt:   String(r.CreatedAt || ''),
+      UpdatedAt:   String(r.UpdatedAt || ''),
+      UpdatedBy:   String(r.UpdatedBy || ''),
     };
   }
 
