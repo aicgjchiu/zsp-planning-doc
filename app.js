@@ -478,7 +478,85 @@
     }
   }
 
+  function applyOptimisticPatch(tab, key, fields){
+    const nowIso = new Date().toISOString();
+    const stamp = { UpdatedAt: nowIso, UpdatedBy: userName || 'anonymous', _pending: true };
+    if(tab === 'Tasks'){
+      const i = taskState.findIndex(t => t.TaskId === key);
+      const patch = Object.assign({}, fields, stamp);
+      if(i >= 0) taskState[i] = Object.assign({}, taskState[i], patch);
+      else       taskState.push(Object.assign({ TaskId: key, CreatedAt: nowIso }, patch));
+    } else if(tab === 'Team'){
+      const i = teamState.findIndex(m => m.MemberId === key);
+      const patch = Object.assign({}, fields, stamp);
+      if(i >= 0) teamState[i] = Object.assign({}, teamState[i], patch);
+      else       teamState.push(Object.assign({ MemberId: key }, patch));
+    } else if(tab === 'Characters'){
+      const i = charactersState.findIndex(c => c.Id === key);
+      let abilities;
+      if(fields.AbilitiesJson !== undefined){
+        try { const p = JSON.parse(fields.AbilitiesJson); abilities = Array.isArray(p) ? p : []; }
+        catch(e){ abilities = []; }
+      } else if(i >= 0){ abilities = charactersState[i].abilities; }
+      else { abilities = []; }
+      const patch = Object.assign({}, fields, { abilities }, stamp);
+      if(i >= 0) charactersState[i] = Object.assign({}, charactersState[i], patch);
+      else       charactersState.push(Object.assign({ Id: key, CreatedAt: nowIso }, patch));
+    } else if(tab === 'Items'){
+      const i = itemsState.findIndex(x => x.Id === key);
+      const patch = Object.assign({}, fields, stamp);
+      if(i >= 0) itemsState[i] = Object.assign({}, itemsState[i], patch);
+      else       itemsState.push(Object.assign({ Id: key, CreatedAt: nowIso }, patch));
+    } else if(tab === 'Maps'){
+      const i = mapsState.findIndex(x => x.Id === key);
+      const patch = Object.assign({}, fields, stamp);
+      if(i >= 0) mapsState[i] = Object.assign({}, mapsState[i], patch);
+      else       mapsState.push(Object.assign({ Id: key, CreatedAt: nowIso }, patch));
+    } else if(tab === 'Systems'){
+      const i = systemsState.findIndex(x => x.Id === key);
+      const patch = Object.assign({}, fields, stamp);
+      if(i >= 0) systemsState[i] = Object.assign({}, systemsState[i], patch);
+      else       systemsState.push(Object.assign({ Id: key, CreatedAt: nowIso }, patch));
+    } else if(tab === 'GanttTracks'){
+      const i = ganttTracksState.findIndex(x => x.TrackId === key);
+      const patch = Object.assign({}, fields, stamp);
+      if(i >= 0) ganttTracksState[i] = Object.assign({}, ganttTracksState[i], patch);
+      else       ganttTracksState.push(Object.assign({ TrackId: key, CreatedAt: nowIso }, patch));
+    } else if(tab === 'GanttBars'){
+      const i = ganttBarsState.findIndex(x => x.BarId === key);
+      const patch = Object.assign({}, fields, stamp);
+      if(i >= 0) ganttBarsState[i] = Object.assign({}, ganttBarsState[i], patch);
+      else       ganttBarsState.push(Object.assign({ BarId: key, CreatedAt: nowIso }, patch));
+    } else if(tab === 'Milestones'){
+      const i = milestonesState.findIndex(x => x.MilestoneId === key);
+      const patch = Object.assign({}, fields, stamp);
+      if(i >= 0) milestonesState[i] = Object.assign({}, milestonesState[i], patch);
+      else       milestonesState.push(Object.assign({ MilestoneId: key, CreatedAt: nowIso }, patch));
+    }
+  }
+
+  function clearPendingFlag(tab, key){
+    const target =
+      tab === 'Tasks'       ? { arr: taskState,        idField: 'TaskId'      } :
+      tab === 'Team'        ? { arr: teamState,        idField: 'MemberId'    } :
+      tab === 'Characters'  ? { arr: charactersState,  idField: 'Id'          } :
+      tab === 'Items'       ? { arr: itemsState,       idField: 'Id'          } :
+      tab === 'Maps'        ? { arr: mapsState,        idField: 'Id'          } :
+      tab === 'Systems'     ? { arr: systemsState,     idField: 'Id'          } :
+      tab === 'GanttTracks' ? { arr: ganttTracksState, idField: 'TrackId'     } :
+      tab === 'GanttBars'   ? { arr: ganttBarsState,   idField: 'BarId'       } :
+      tab === 'Milestones'  ? { arr: milestonesState,  idField: 'MilestoneId' } : null;
+    if(!target) return;
+    const i = target.arr.findIndex(x => x[target.idField] === key);
+    if(i >= 0 && target.arr[i]._pending){
+      const copy = Object.assign({}, target.arr[i]);
+      delete copy._pending;
+      target.arr[i] = copy;
+    }
+  }
+
   async function pushRow(tab, key, fields){
+    applyOptimisticPatch(tab, key, fields);
     pendingWrites++;
     updateSyncPill();
     try{
@@ -492,53 +570,11 @@
       if(!json.ok) throw new Error(json.error || 'push failed');
       lastSyncAt = new Date();
       setSyncStatus('ok');
-      // Optimistic local update so UI doesn't wait on next poll
-      const nowIso = new Date().toISOString();
-      const stamp = { UpdatedAt: nowIso, UpdatedBy: userName || 'anonymous' };
-      if(tab === 'Tasks'){
-        const i = taskState.findIndex(t => t.TaskId === key);
-        const patch = Object.assign({}, fields, stamp);
-        if(i >= 0) taskState[i] = Object.assign({}, taskState[i], patch);
-        else taskState.push(Object.assign({ TaskId: key, CreatedAt: nowIso }, patch));
-      } else if(tab === 'Team'){
-        const i = teamState.findIndex(m => m.MemberId === key);
-        const patch = Object.assign({}, fields, stamp);
-        if(i >= 0) teamState[i] = Object.assign({}, teamState[i], patch);
-        else teamState.push(Object.assign({ MemberId: key }, patch));
-      } else if(tab === 'Characters'){
-        const i = charactersState.findIndex(c => c.Id === key);
-        // AbilitiesJson → abilities array for renderCharacters
-        let abilities;
-        if (fields.AbilitiesJson !== undefined){
-          try { const p = JSON.parse(fields.AbilitiesJson); abilities = Array.isArray(p) ? p : []; }
-          catch(e){ abilities = []; }
-        } else if (i >= 0){
-          abilities = charactersState[i].abilities;
-        } else {
-          abilities = [];
-        }
-        const patch = Object.assign({}, fields, { abilities }, stamp);
-        if(i >= 0) charactersState[i] = Object.assign({}, charactersState[i], patch);
-        else charactersState.push(Object.assign({ Id: key, CreatedAt: nowIso }, patch));
-      } else if(tab === 'Items'){
-        const i = itemsState.findIndex(x => x.Id === key);
-        const patch = Object.assign({}, fields, stamp);
-        if(i >= 0) itemsState[i] = Object.assign({}, itemsState[i], patch);
-        else itemsState.push(Object.assign({ Id: key, CreatedAt: nowIso }, patch));
-      } else if(tab === 'Maps'){
-        const i = mapsState.findIndex(x => x.Id === key);
-        const patch = Object.assign({}, fields, stamp);
-        if(i >= 0) mapsState[i] = Object.assign({}, mapsState[i], patch);
-        else mapsState.push(Object.assign({ Id: key, CreatedAt: nowIso }, patch));
-      } else if(tab === 'Systems'){
-        const i = systemsState.findIndex(x => x.Id === key);
-        const patch = Object.assign({}, fields, stamp);
-        if(i >= 0) systemsState[i] = Object.assign({}, systemsState[i], patch);
-        else systemsState.push(Object.assign({ Id: key, CreatedAt: nowIso }, patch));
-      }
+      clearPendingFlag(tab, key);
     }catch(err){
       console.warn('[sync] push error:', err);
       setSyncStatus('error');
+      clearPendingFlag(tab, key);
       alert('Could not save to Google Sheet. Check your connection and try again.\n\n' + err.message);
     }finally{
       pendingWrites--;
