@@ -531,85 +531,9 @@
           renderMilestones();
         }
       }
-      await bootstrapIfEmpty();
     }catch(err){
       console.warn('[sync] fetch error:', err);
       setSyncStatus('error');
-    }
-  }
-
-  async function bootstrapIfEmpty(){
-    const needsRoadmap = !ganttTracksState.length && !ganttBarsState.length && !milestonesState.length
-                          && window.GANTT && window.MILESTONES;
-    // Treat default-fallback timelineState (no UpdatedAt) as "sheet empty" — a real row would have UpdatedAt.
-    const needsTimeline    = !timelineState || !timelineState.UpdatedAt;
-    const needsQuarterPlan = !quarterPlanState.length && !!window.QUARTER_PLAN;
-    if(!needsRoadmap && !needsTimeline && !needsQuarterPlan) return;
-
-    const tabs = {};
-
-    if(needsRoadmap){
-      const tracks = [];
-      const bars = [];
-      window.GANTT.forEach((lane, laneIdx) => {
-        if((lane.role || '').toLowerCase() === 'milestone') return;
-        const trackId = genId('track');
-        tracks.push({
-          TrackId: trackId, Name: lane.who || lane.name || 'Track',
-          Role: lane.role || 'code', Order: laneIdx,
-          Hidden: false, SortOrder: laneIdx,
-        });
-        (lane.bars || []).forEach((b, bi) => {
-          bars.push({
-            BarId: genId('bar'), TrackId: trackId, Name: b.name,
-            Start: b.start, End: b.end, Color: b.color || lane.role || 'code',
-            Hidden: false, SortOrder: bi,
-          });
-        });
-      });
-      const milestones = window.MILESTONES.map((m, i) => ({
-        MilestoneId: genId('ms'),
-        Quarter: m.q || m.quarter || '',
-        Name: m.name || '', Goal: m.goal || '',
-        Hidden: false, SortOrder: i,
-      }));
-      tabs.GanttTracks = tracks;
-      tabs.GanttBars   = bars;
-      tabs.Milestones  = milestones;
-    }
-
-    if(needsTimeline){
-      tabs.Timeline = [{ Key: 'config', TotalYears: 3 }];
-    }
-
-    if(needsQuarterPlan){
-      tabs.QuarterPlan = window.QUARTER_PLAN.map((r, i) => ({
-        QuarterId:      r.QuarterId,
-        Quarter:        r.Quarter,
-        ProgrammerPlan: r.programmer || '',
-        CharPlan:       r.char       || '',
-        EnvPlan:        r.env        || '',
-        VfxPlan:        r.vfx        || '',
-        Gate:           r.gate       || '',
-        Hidden: false, SortOrder: i,
-      }));
-    }
-
-    if(!Object.keys(tabs).length) return;
-
-    try{
-      await fetch(SHEET_ENDPOINT, {
-        method: 'POST',
-        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-        body: JSON.stringify({
-          Action: 'bootstrap',
-          UpdatedBy: userName || 'bootstrap',
-          Tabs: tabs,
-        }),
-      });
-      await fetchAll();
-    }catch(err){
-      console.warn('[bootstrap] failed:', err);
     }
   }
 

@@ -24,11 +24,11 @@ This doc is **separate from the ZSP game codebase itself** (that lives in a Perf
 |---|---|
 | `index.html` | Shell. 4 tabs: Overview, Roadmap, Design Doc, Task Board. All tab content lives inline. |
 | `styles.css` | All styles. Uses CSS custom props in `:root` for the color system (oklch). |
-| `data.js` | Roadmap-only content as `window.*` globals: `GANTT`, `PHASES`, `MILESTONES`. Everything else (tasks, characters, items, maps, systems) is sourced live from the Google Sheet. |
+| `data.js` | The last remaining hard-coded structure: `window.PHASES` — the 6-phase metadata used by the static Phases table and the Task Board phase labels. Everything else (Gantt, milestones, tasks, characters, items, maps, systems, timeline, quarter plan) is sourced live from the Google Sheet. |
 | `app.js` | Rendering + tab switching + task-board sync logic. No frameworks; hand-rolled template strings. |
 | `CLAUDE.md` | This file. |
 
-To shift a Gantt bar / reword a phase goal / retime a milestone, edit `data.js`. To change a task, character, item, map, or system, use the in-page UI (the sheet is the source of truth).
+To reword a phase goal, edit `data.js`. Everything else is edited through the in-page UI (the sheet is the source of truth).
 
 ## Architecture
 
@@ -58,7 +58,7 @@ Live-synced task board backed by a Google Sheet via an Apps Script web app. **Th
 - **Read:** `GET` returns `{ ok: true, tasks: [...], team: [...] }` — one object per row, keyed by header.
 - **Write:** `POST` with `Content-Type: text/plain;charset=utf-8` and JSON body `{ Tab: "Tasks"|"Team", Key: <TaskId|MemberId>, Fields: { ... }, UpdatedBy: <name> }`. Script appends if key doesn't exist, otherwise updates only the named fields. `UpdatedAt` + `UpdatedBy` stamped automatically.
 - **Key column convention:** each tab's first column is its primary key. The Apps Script `handleUpsert` detects this from the header row — no per-tab branching. New tabs just need a unique-ID first column to work with the envelope.
-- **Bootstrap:** on page load, if the three Roadmap tabs are empty, the client POSTs `{ Action: "bootstrap", Tabs: { GanttTracks: [...], GanttBars: [...], Milestones: [...] } }` seeded from `window.GANTT` + `window.MILESTONES` in `data.js`. `handleBootstrap` accepts this generic `Tabs` envelope (and a legacy top-level shape for one-release compat) and seeds rows atomically inside `LockService.getScriptLock()`, re-checking emptiness inside the critical section so two simultaneous loads don't double-seed.
+- **Bootstrap:** the sheet is the source of truth. There is no client-side seed path — if a tab is wiped, repopulate it by hand. `handleBootstrap` on the Apps Script side still exists (accepts `{ Action: "bootstrap", Tabs: { <TabName>: [rows], ... } }`, seeds under `LockService.getScriptLock()`, skips any tab with existing data) but no client code currently calls it. It's kept for emergency re-seeding via a one-off curl.
 - **Polling + immediate refetch:** `fetchAll()` runs on page load and every 30s thereafter. Every structural write (add/edit/soft-delete, team save, status change) refetches right after the push succeeds so teammate changes show up immediately. Notes textarea stays optimistic-only (debounced; 30s poll reconciles) to avoid clobbering active typing.
 - **Identity:** user's name is prompted on page load (via `DOMContentLoaded` → post-fetch prompt in `fetchAll`) and stored in `localStorage` under `zsp_user_name`. Stamped on every write as `UpdatedBy`. Add/Edit/Delete/Team buttons are disabled until identity is set; status/notes inline edits still work without it.
 - **Soft delete only:** setting `Hidden=TRUE` filters a task from the UI. Row stays in the sheet and can be recovered by flipping the flag manually.
@@ -69,11 +69,11 @@ Live-synced task board backed by a Google Sheet via an Apps Script web app. **Th
 - **New tasks** (created via the UI) get a client-generated ID: `task-<timestamp>-<random>`. Stable for the lifetime of the row.
 - `MemberId` links a task to a team member; `RoleKey` on the team member drives chip color.
 
-The sheet is the sole source of truth for tasks. The seed arrays have been removed from `data.js`; the client no longer has any fallback content for Tasks/Team/Characters/Items/Maps/Systems — if the sheet is wiped, it must be repopulated manually.
+The sheet is the sole source of truth for tasks. The client has no fallback content for any sheet-backed tab — if a tab is wiped, repopulate it by hand.
 
 ### Gantt
 
-The Gantt is a CSS grid: a fixed 240px label column + 12 quarter columns of 120px each (Y1Q1 → Y3Q4). Total min-width ~1680px, rendered inside `.gantt-scroll` which provides horizontal overflow. Bars are positioned with `grid-column: ${b.start+1} / span ${b.end-b.start}`. Bar data lives in `window.GANTT` in `data.js`.
+The Gantt is a CSS grid: a fixed 240px label column + N quarter columns of 120px each, where N = `timelineState.TotalYears * 4` (read from the `Timeline` sheet tab). The column count is wired through the `--total-quarters` CSS custom property set by `renderGantt`. Rendered inside `.gantt-scroll` for horizontal overflow. Bars are positioned with `grid-column: ${b.Start+1} / span ${b.End-b.Start}`, sourced from the `GanttBars` sheet tab.
 
 ## Content Conventions
 
@@ -126,15 +126,14 @@ Live URL: https://aicgjchiu.github.io/zsp-planning-doc/
 - **GitHub Pages cache:** Pages sets fairly aggressive cache headers. If a teammate reports they don't see a UI update you just pushed, have them hard-refresh (Cmd/Ctrl+Shift+R).
 - **Main HTML filename:** the entry file is `index.html` (renamed from the original `ZSP Planning Doc.html`) so the root URL works on GitHub Pages. Don't rename it back.
 - **Claude preview sandbox blocks the fetch.** If you're previewing the page inside the Claude artifact sandbox (`claudeusercontent.com`), the Task Board will be stuck on "Connecting…" — cross-origin fetches to `script.google.com` are blocked in that sandbox. Test the sync on the deployed GitHub Pages URL or from `file://`, not inside the Claude preview.
-- **Don't add a framework.** The whole appeal of this repo is that anyone on the team can open the files and hand-edit content in `data.js`. Keep it buildless.
-- **Pending cleanup — `window.GANTT` / `window.MILESTONES` / `window.QUARTER_PLAN`.** These globals in `data.js` are kept to seed the Roadmap + QuarterPlan sheet tabs on first deploy (via `bootstrapIfEmpty`). Once the live sheet is confirmed populated, a follow-up PR should retire them, remove the bootstrap seed-building path from `app.js`, and drop the legacy-shape compatibility branch from `handleBootstrap` in `apps-script.gs`.
+- **Don't add a framework.** The whole appeal of this repo is that anyone on the team can open it in a browser with zero tooling. Keep it buildless.
 - **Writes are fully optimistic.** Every `pushRow(...)` mutates local state synchronously *before* the POST fires, and stamps `_pending: true` on the row; renderers attach a `.pending` class (dashed outline on cards, left-side inset shadow on table rows, dashed outline on Gantt bars) while the flag is live. `pushRow` clears `_pending` when the POST settles. If the POST fails, the existing `alert()` fires and the sync pill turns red — the row keeps its pending style until the next 30-second poll reconciles it back to server truth. No rollback on error — the poll is the rollback.
 
 ## When Editing
 
-- **Change task content:** edit tasks from the Task Board tab UI (click `⋯` on a card) — this is the source of truth. `data.js` no longer contains task seed data.
+- **Change task content:** edit tasks from the Task Board tab UI (click `⋯` on a card) — the sheet is the source of truth.
 - **Team composition:** use the Task Board's "Team" button to add / rename / reorder / deactivate members. No code change needed when the team composition shifts.
-- **Change Design Doc content:** edit characters/items/maps/systems via the Design Doc tab UI (click `⋯` on any card or row, `＋` in a section header to add). The sheet is the source of truth. `data.js` no longer contains Design Doc seed arrays.
+- **Change Design Doc content:** edit characters/items/maps/systems via the Design Doc tab UI (click `⋯` on any card or row, `＋` in a section header to add). The sheet is the source of truth.
 - **Character abilities:** exactly 3 slots per character, keyed `Q`/`R`/`T`, edited through the Character modal's sub-table. Stored as `JSON.stringify(abilities)` in the `AbilitiesJson` column of the Characters row. If a character ever needs a 4th ability, the schema tolerates it — only the modal UI enforces count-of-3 today.
 - **Add a character / map / item:** use the ＋ button in the corresponding Design Doc section. Field shapes are defined by the sheet tab headers (Characters / Items / Maps) and consumed by `app.js::renderCharacters` etc.
 - **Change a Gantt track or bar:** edit from the Roadmap tab UI. The "Tracks" button in the Roadmap header opens a modal for rename/role/reorder/delete/add. On the Gantt itself, `⋯` on a bar opens its edit modal (name/color/quarters/delete); drag a bar to move or resize (first/last 8px = resize, middle = move); `＋` at the end of each track row adds a new bar. The sheet is the source of truth.

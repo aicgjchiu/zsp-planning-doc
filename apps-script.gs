@@ -118,15 +118,8 @@ function handleBootstrap(body) {
   try {
     const ss = SpreadsheetApp.getActiveSpreadsheet();
 
-    // Generic shape: { Action: "bootstrap", Tabs: { <TabName>: [rows], ... } }
-    // Legacy shape (one release of compat): top-level Tasks/Team/Characters/...
-    let tabs = body.Tabs;
-    if (!tabs) {
-      tabs = {};
-      ['Tasks', 'Team', 'Characters', 'Items', 'Maps', 'Systems'].forEach(name => {
-        if (body[name]) tabs[name] = body[name];
-      });
-    }
+    // Shape: { Action: "bootstrap", Tabs: { <TabName>: [rows], ... } }
+    const tabs = body.Tabs || {};
 
     const now = new Date().toISOString();
     const updatedBy = body.UpdatedBy || 'bootstrap';
