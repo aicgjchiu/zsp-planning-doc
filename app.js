@@ -561,6 +561,15 @@
     }
   }
 
+  // Runs fetchAll only when no writes are in flight. Used by every caller
+  // that wants to reconcile local state with the server after a push. If
+  // multiple pushRow calls are chained (e.g. bulk-save, rapid drags), only
+  // the last one to resolve will actually trigger the GET, preventing stale
+  // reads that snap the UI back to an older server state.
+  function fetchIfIdle(){
+    if(pendingWrites === 0) fetchAll();
+  }
+
   async function pushRow(tab, key, fields){
     applyOptimisticPatch(tab, key, fields);
     pendingWrites++;
@@ -1006,7 +1015,7 @@
           const p = pushRow('GanttBars', newId, fields);
           renderGantt();
           openBarModal(newId);
-          p.then(() => fetchAll());
+          p.then(fetchIfIdle);
         }
       });
     }
@@ -1032,7 +1041,7 @@
     // Identity: read from localStorage on load. If not present, prompt after first fetch.
     try{ userName = localStorage.getItem(USER_KEY) || ''; }catch(e){}
     fetchAll();
-    setInterval(fetchAll, POLL_MS);
+    setInterval(fetchIfIdle, POLL_MS);
     // update the "synced Xs ago" pill every second
     setInterval(updateSyncPill, 1000);
   }
@@ -1120,7 +1129,7 @@
         closeModal();
         const p = pushRow('Tasks', key, fields);
         renderBoard();
-        p.then(() => fetchAll());
+        p.then(fetchIfIdle);
       });
       if(!isNew){
         qs('[data-action="delete"]', panel).addEventListener('click', () => {
@@ -1137,7 +1146,7 @@
             closeModal();
             const p = pushRow('Tasks', t.TaskId, { Hidden: true });
             renderBoard();
-            p.then(() => fetchAll());
+            p.then(fetchIfIdle);
           });
         });
       }
@@ -1251,7 +1260,7 @@
             });
           }
         }
-        setTimeout(() => fetchAll(), 100);
+        setTimeout(fetchIfIdle, 100);
       });
     }
 
@@ -1336,7 +1345,7 @@
     if(!moved || (newStart === origStart && newEnd === origEnd)) return;
     const p = pushRow('GanttBars', barId, { Start: newStart, End: newEnd });
     renderGantt();
-    p.then(() => fetchAll());
+    p.then(fetchIfIdle);
   }
 
   function onBarPointerCancel(e){
@@ -1400,7 +1409,7 @@
         closeModal();
         const p = pushRow('GanttBars', bar.BarId, { Hidden: true });
         renderGantt();
-        p.then(() => fetchAll());
+        p.then(fetchIfIdle);
       });
       qs('[data-action="save"]', panel).addEventListener('click', () => {
         const name = qs('#bar-name', panel).value.trim();
@@ -1412,7 +1421,7 @@
         const patch = { Name: name, Color: color, Start: start, End: end };
         const p = pushRow('GanttBars', bar.BarId, patch);
         renderGantt();
-        p.then(() => fetchAll());
+        p.then(fetchIfIdle);
       });
     });
   }
@@ -1451,7 +1460,7 @@
         const p = pushRow('Milestones', m.MilestoneId, { Hidden: true });
         renderGantt();
         renderMilestones();
-        p.then(() => fetchAll());
+        p.then(fetchIfIdle);
       });
       qs('[data-action="save"]', panel).addEventListener('click', () => {
         const quarter = qs('#ms-quarter', panel).value;
@@ -1462,7 +1471,7 @@
         const p = pushRow('Milestones', m.MilestoneId, patch);
         renderGantt();
         renderMilestones();
-        p.then(() => fetchAll());
+        p.then(fetchIfIdle);
       });
     });
   }
@@ -1489,7 +1498,7 @@
     renderGantt();
     renderMilestones();
     openMilestoneModal(newId);
-    p.then(() => fetchAll());
+    p.then(fetchIfIdle);
   }
 
   function openTracksModal(){
@@ -1606,7 +1615,7 @@
             });
           }
         }
-        setTimeout(() => fetchAll(), 100);
+        setTimeout(fetchIfIdle, 100);
       });
     }
 
@@ -1681,7 +1690,7 @@
         closeModal();
         const p = pushRow('Systems', key, fields);
         renderSystems();
-        p.then(() => fetchAll());
+        p.then(fetchIfIdle);
       });
       if(!isNew){
         qs('[data-action="delete"]', panel).addEventListener('click', () => {
@@ -1698,7 +1707,7 @@
             closeModal();
             const p = pushRow('Systems', s.Id, { Hidden: true });
             renderSystems();
-            p.then(() => fetchAll());
+            p.then(fetchIfIdle);
           });
         });
       }
@@ -1804,7 +1813,7 @@
         closeModal();
         const p = pushRow('Characters', key, fields);
         renderCharacters();
-        p.then(() => fetchAll());
+        p.then(fetchIfIdle);
       });
       if(!isNew){
         qs('[data-action="delete"]', panel).addEventListener('click', () => {
@@ -1821,7 +1830,7 @@
             closeModal();
             const p = pushRow('Characters', c.Id, { Hidden: true });
             renderCharacters();
-            p.then(() => fetchAll());
+            p.then(fetchIfIdle);
           });
         });
       }
@@ -1876,7 +1885,7 @@
         closeModal();
         const p = pushRow('Maps', key, fields);
         renderMaps();
-        p.then(() => fetchAll());
+        p.then(fetchIfIdle);
       });
       if(!isNew){
         qs('[data-action="delete"]', panel).addEventListener('click', () => {
@@ -1893,7 +1902,7 @@
             closeModal();
             const p = pushRow('Maps', m.Id, { Hidden: true });
             renderMaps();
-            p.then(() => fetchAll());
+            p.then(fetchIfIdle);
           });
         });
       }
@@ -1952,7 +1961,7 @@
         closeModal();
         const p = pushRow('Items', key, fields);
         renderItems();
-        p.then(() => fetchAll());
+        p.then(fetchIfIdle);
       });
       if(!isNew){
         qs('[data-action="delete"]', panel).addEventListener('click', () => {
@@ -1969,7 +1978,7 @@
             closeModal();
             const p = pushRow('Items', it.Id, { Hidden: true });
             renderItems();
-            p.then(() => fetchAll());
+            p.then(fetchIfIdle);
           });
         });
       }
