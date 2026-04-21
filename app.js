@@ -27,6 +27,14 @@
   });
 
   // --- Render: Gantt ---
+  // Quarter strings: "Y1 Q2" -> 1 (0-based quarter index across the 12-quarter span).
+  function parseQuarter(s){
+    const m = /^Y(\d)\s*Q(\d)$/.exec(String(s || '').trim());
+    if(!m) return -1;
+    const idx = (Number(m[1]) - 1) * 4 + (Number(m[2]) - 1);
+    return (idx >= 0 && idx < 12) ? idx : -1;
+  }
+
   function renderGantt(){
     const host = qs('#gantt');
     if(!host) return;
@@ -41,19 +49,44 @@
       }
     }
     html += '</div>';
-    // rows
-    window.GANTT.forEach(row=>{
-      html += `<div class="gantt-row">`;
-      html += `<div class="who"><span class="dot ${row.role}"></span>${row.who}</div>`;
+
+    // User tracks — rendered from ganttTracksState/ganttBarsState
+    const tracks = ganttTracksState
+      .filter(t => !t.Hidden)
+      .slice()
+      .sort((a,b) => (a.Order||0) - (b.Order||0));
+
+    tracks.forEach(track => {
+      html += `<div class="gantt-row" data-track-id="${escapeHtml(track.TrackId)}">`;
+      html += `<div class="who"><span class="dot ${escapeHtml(track.Role)}"></span>${escapeHtml(track.Name)}</div>`;
       html += `<div class="track">`;
-      row.bars.forEach(b=>{
-        const col = b.start+1;
-        const span = Math.max(1, b.end - b.start);
-        const title = (b.title || b.name || '').replace(/"/g,'&quot;');
-        html += `<div class="gbar ${b.color}" style="grid-column:${col} / span ${span}" title="${title}">${b.name}</div>`;
+      const bars = ganttBarsState
+        .filter(b => b.TrackId === track.TrackId && !b.Hidden);
+      bars.forEach(b => {
+        const col = Number(b.Start) + 1;
+        const span = Math.max(1, Number(b.End) - Number(b.Start));
+        html += `<div class="gbar ${escapeHtml(b.Color || 'code')}" data-bar-id="${escapeHtml(b.BarId)}" style="grid-column:${col} / span ${span}" title="${escapeHtml(b.Name)}">${escapeHtml(b.Name)}</div>`;
       });
       html += `</div></div>`;
     });
+
+    // Auto-derived read-only milestone row (no drag, no ⋯ button)
+    html += `<div class="gantt-row gantt-milestone-row">`;
+    html += `<div class="who"><span class="dot" style="background:var(--c-milestone)"></span>Milestones</div>`;
+    html += `<div class="track">`;
+    milestonesState
+      .filter(m => !m.Hidden)
+      .forEach(m => {
+        const qIdx = parseQuarter(m.Quarter);
+        if(qIdx < 0){
+          console.warn(`[gantt] invalid milestone quarter: ${m.Quarter}`);
+          return;
+        }
+        const title = (m.Goal ? `${m.Name} — ${m.Goal}` : m.Name);
+        html += `<div class="gbar milestone" style="grid-column:${qIdx + 1} / span 1" title="${escapeHtml(title)}">${escapeHtml(m.Name)}</div>`;
+      });
+    html += `</div></div>`;
+
     host.innerHTML = html;
   }
 
@@ -61,13 +94,21 @@
   function renderMilestones(){
     const host = qs('#milestones');
     if(!host) return;
-    host.innerHTML = window.MILESTONES.map(m=>`
-      <div class="ms">
-        <div class="q">${m.q}</div>
-        <div class="name">${m.name}</div>
-        <div class="goal">${m.goal}</div>
+    const active = milestonesState
+      .filter(m => !m.Hidden)
+      .slice()
+      .sort((a,b) => parseQuarter(a.Quarter) - parseQuarter(b.Quarter));
+
+    const cards = active.map(m => `
+      <div class="ms" data-milestone-id="${escapeHtml(m.MilestoneId)}">
+        <button class="ms-more" data-milestone-id="${escapeHtml(m.MilestoneId)}" title="Edit milestone">⋯</button>
+        <div class="q">${escapeHtml(m.Quarter)}</div>
+        <div class="name">${escapeHtml(m.Name)}</div>
+        <div class="goal">${escapeHtml(m.Goal || '')}</div>
       </div>
     `).join('');
+
+    host.innerHTML = cards + `<button class="ms-add" id="milestone-add-btn" title="Add milestone">＋</button>`;
   }
 
   // --- Render: Phases table ---
