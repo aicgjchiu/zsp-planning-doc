@@ -62,18 +62,24 @@
       const bars = ganttBarsState
         .filter(b => b.TrackId === track.TrackId && !b.Hidden)
         .slice()
-        .sort((a,b) => Number(a.Start) - Number(b.Start));
-      // Interval-pack: each bar gets a lane (grid-row) so overlaps stack vertically.
-      const laneEnds = []; // laneEnds[i] = end quarter of last bar on lane i
+        // Stable ordering by BarId (creation time) — NOT by Start.
+        // Sorting by Start would cause bars to swap lanes on drag; this keeps
+        // each bar's lane stable so dragging moves only that bar.
+        .sort((a,b) => String(a.BarId).localeCompare(String(b.BarId)));
+      // Pack into lanes: per-lane list of { start, end } ranges. A bar takes
+      // the lowest-index lane where it doesn't overlap any existing range.
+      const laneRanges = []; // laneRanges[i] = array of {s, e}
       const laneByBar = {};
       bars.forEach(b => {
         const s = Number(b.Start), en = Number(b.End);
-        let lane = laneEnds.findIndex(end => end <= s);
-        if(lane < 0){ lane = laneEnds.length; laneEnds.push(en); }
-        else { laneEnds[lane] = en; }
+        let lane = laneRanges.findIndex(ranges =>
+          ranges.every(r => en <= r.s || s >= r.e)
+        );
+        if(lane < 0){ lane = laneRanges.length; laneRanges.push([{s, e: en}]); }
+        else { laneRanges[lane].push({s, e: en}); }
         laneByBar[b.BarId] = lane;
       });
-      const laneCount = Math.max(1, laneEnds.length);
+      const laneCount = Math.max(1, laneRanges.length);
 
       html += `<div class="gantt-row" data-track-id="${escapeHtml(track.TrackId)}" style="--lane-count:${laneCount}">`;
       html += `<div class="who"><span class="dot ${escapeHtml(track.Role)}"></span>${escapeHtml(track.Name)}</div>`;
@@ -82,7 +88,7 @@
         const col = Number(b.Start) + 1;
         const span = Math.max(1, Number(b.End) - Number(b.Start));
         const lane = (laneByBar[b.BarId] || 0) + 1;
-        html += `<div class="gbar ${escapeHtml(b.Color || 'code')}" data-bar-id="${escapeHtml(b.BarId)}" style="grid-column:${col} / span ${span};grid-row:${lane}" title="${escapeHtml(b.Name)}">`
+        html += `<div class="gbar ${escapeHtml(b.Color || 'code')}${b._pending ? ' pending' : ''}" data-bar-id="${escapeHtml(b.BarId)}" style="grid-column:${col} / span ${span};grid-row:${lane}" title="${escapeHtml(b.Name)}">`
               + `<span class="gbar-name">${escapeHtml(b.Name)}</span>`
               + `<button class="gbar-more" data-bar-id="${escapeHtml(b.BarId)}" ${gateAttr || 'title="Edit bar"'}>⋯</button>`
               + `</div>`;
@@ -104,7 +110,7 @@
           return;
         }
         const title = (m.Goal ? `${m.Name} — ${m.Goal}` : m.Name);
-        html += `<div class="gbar milestone" style="grid-column:${qIdx + 1} / span 1" title="${escapeHtml(title)}">`
+        html += `<div class="gbar milestone${m._pending ? ' pending' : ''}" style="grid-column:${qIdx + 1} / span 1" title="${escapeHtml(title)}">`
               + `<span class="gbar-name">${escapeHtml(m.Name)}</span>`
               + `<button class="gbar-more ms-row-more" data-milestone-id="${escapeHtml(m.MilestoneId)}" ${gateAttr || 'title="Edit milestone"'}>⋯</button>`
               + `</div>`;
@@ -126,7 +132,7 @@
       .sort((a,b) => parseQuarter(a.Quarter) - parseQuarter(b.Quarter));
 
     const cards = active.map(m => `
-      <div class="ms" data-milestone-id="${escapeHtml(m.MilestoneId)}">
+      <div class="ms${m._pending ? ' pending' : ''}" data-milestone-id="${escapeHtml(m.MilestoneId)}">
         <button class="ms-more" data-milestone-id="${escapeHtml(m.MilestoneId)}" ${gateAttr || 'title="Edit milestone"'}>⋯</button>
         <div class="q">${escapeHtml(m.Quarter)}</div>
         <div class="name">${escapeHtml(m.Name)}</div>
@@ -176,7 +182,7 @@
         </tr>
       `).join('');
       return `
-        <div class="card" data-char-id="${escapeAttr(c.Id)}" style="padding:22px">
+        <div class="card${c._pending ? ' pending' : ''}" data-char-id="${escapeAttr(c.Id)}" style="padding:22px">
           <button class="card-menu-btn" data-char-id="${escapeAttr(c.Id)}" ${canEdit?'':'disabled title="Set your name first"'}>⋯</button>
           <div class="row" style="justify-content:space-between;margin-bottom:8px">
             <div>
@@ -220,7 +226,7 @@
       .slice()
       .sort((a,b) => a.SortOrder - b.SortOrder);
     host.innerHTML = rows.map((it, i) => `
-      <tr>
+      <tr class="${it._pending ? 'pending' : ''}">
         <td class="mono dim">${String(i+1).padStart(2,'0')}</td>
         <td><b>${escapeHtml(it.Name)}</b></td>
         <td>${escapeHtml(it.Kind)}</td>
@@ -248,7 +254,7 @@
       .slice()
       .sort((a,b) => a.SortOrder - b.SortOrder);
     host.innerHTML = rows.map((m, i) => `
-      <div class="card" data-map-id="${escapeAttr(m.Id)}">
+      <div class="card${m._pending ? ' pending' : ''}" data-map-id="${escapeAttr(m.Id)}">
         <button class="card-menu-btn" data-map-id="${escapeAttr(m.Id)}" ${canEdit?'':'disabled title="Set your name first"'}>⋯</button>
         <div class="label">Map ${String(i+1).padStart(2,'0')} · ${escapeHtml(m.Difficulty)}</div>
         <h3>${escapeHtml(m.Name)}</h3>
@@ -279,7 +285,7 @@
       .slice()
       .sort((a,b) => a.SortOrder - b.SortOrder);
     host.innerHTML = rows.map(s => `
-      <tr>
+      <tr class="${s._pending ? 'pending' : ''}">
         <td><b>${escapeHtml(s.System)}</b></td>
         <td>${s.SysStatus==='In code' ? '<span class="chip done">In code</span>' : '<span class="chip">'+escapeHtml(s.SysStatus)+'</span>'}</td>
         <td class="dim">${escapeHtml(s.Dep)}</td>
@@ -478,7 +484,94 @@
     }
   }
 
+  function applyOptimisticPatch(tab, key, fields){
+    const nowIso = new Date().toISOString();
+    const stamp = { UpdatedAt: nowIso, UpdatedBy: userName || 'anonymous', _pending: true };
+    if(tab === 'Tasks'){
+      const i = taskState.findIndex(t => t.TaskId === key);
+      const patch = Object.assign({}, fields, stamp);
+      if(i >= 0) taskState[i] = Object.assign({}, taskState[i], patch);
+      else       taskState.push(Object.assign({ TaskId: key, CreatedAt: nowIso }, patch));
+    } else if(tab === 'Team'){
+      const i = teamState.findIndex(m => m.MemberId === key);
+      const patch = Object.assign({}, fields, stamp);
+      if(i >= 0) teamState[i] = Object.assign({}, teamState[i], patch);
+      else       teamState.push(Object.assign({ MemberId: key }, patch));
+    } else if(tab === 'Characters'){
+      const i = charactersState.findIndex(c => c.Id === key);
+      let abilities;
+      if(fields.AbilitiesJson !== undefined){
+        try { const p = JSON.parse(fields.AbilitiesJson); abilities = Array.isArray(p) ? p : []; }
+        catch(e){ abilities = []; }
+      } else if(i >= 0){ abilities = charactersState[i].abilities; }
+      else { abilities = []; }
+      const patch = Object.assign({}, fields, { abilities }, stamp);
+      if(i >= 0) charactersState[i] = Object.assign({}, charactersState[i], patch);
+      else       charactersState.push(Object.assign({ Id: key, CreatedAt: nowIso }, patch));
+    } else if(tab === 'Items'){
+      const i = itemsState.findIndex(x => x.Id === key);
+      const patch = Object.assign({}, fields, stamp);
+      if(i >= 0) itemsState[i] = Object.assign({}, itemsState[i], patch);
+      else       itemsState.push(Object.assign({ Id: key, CreatedAt: nowIso }, patch));
+    } else if(tab === 'Maps'){
+      const i = mapsState.findIndex(x => x.Id === key);
+      const patch = Object.assign({}, fields, stamp);
+      if(i >= 0) mapsState[i] = Object.assign({}, mapsState[i], patch);
+      else       mapsState.push(Object.assign({ Id: key, CreatedAt: nowIso }, patch));
+    } else if(tab === 'Systems'){
+      const i = systemsState.findIndex(x => x.Id === key);
+      const patch = Object.assign({}, fields, stamp);
+      if(i >= 0) systemsState[i] = Object.assign({}, systemsState[i], patch);
+      else       systemsState.push(Object.assign({ Id: key, CreatedAt: nowIso }, patch));
+    } else if(tab === 'GanttTracks'){
+      const i = ganttTracksState.findIndex(x => x.TrackId === key);
+      const patch = Object.assign({}, fields, stamp);
+      if(i >= 0) ganttTracksState[i] = Object.assign({}, ganttTracksState[i], patch);
+      else       ganttTracksState.push(Object.assign({ TrackId: key, CreatedAt: nowIso }, patch));
+    } else if(tab === 'GanttBars'){
+      const i = ganttBarsState.findIndex(x => x.BarId === key);
+      const patch = Object.assign({}, fields, stamp);
+      if(i >= 0) ganttBarsState[i] = Object.assign({}, ganttBarsState[i], patch);
+      else       ganttBarsState.push(Object.assign({ BarId: key, CreatedAt: nowIso }, patch));
+    } else if(tab === 'Milestones'){
+      const i = milestonesState.findIndex(x => x.MilestoneId === key);
+      const patch = Object.assign({}, fields, stamp);
+      if(i >= 0) milestonesState[i] = Object.assign({}, milestonesState[i], patch);
+      else       milestonesState.push(Object.assign({ MilestoneId: key, CreatedAt: nowIso }, patch));
+    }
+  }
+
+  function clearPendingFlag(tab, key){
+    const target =
+      tab === 'Tasks'       ? { arr: taskState,        idField: 'TaskId'      } :
+      tab === 'Team'        ? { arr: teamState,        idField: 'MemberId'    } :
+      tab === 'Characters'  ? { arr: charactersState,  idField: 'Id'          } :
+      tab === 'Items'       ? { arr: itemsState,       idField: 'Id'          } :
+      tab === 'Maps'        ? { arr: mapsState,        idField: 'Id'          } :
+      tab === 'Systems'     ? { arr: systemsState,     idField: 'Id'          } :
+      tab === 'GanttTracks' ? { arr: ganttTracksState, idField: 'TrackId'     } :
+      tab === 'GanttBars'   ? { arr: ganttBarsState,   idField: 'BarId'       } :
+      tab === 'Milestones'  ? { arr: milestonesState,  idField: 'MilestoneId' } : null;
+    if(!target) return;
+    const i = target.arr.findIndex(x => x[target.idField] === key);
+    if(i >= 0 && target.arr[i]._pending){
+      const copy = Object.assign({}, target.arr[i]);
+      delete copy._pending;
+      target.arr[i] = copy;
+    }
+  }
+
+  // Runs fetchAll only when no writes are in flight. Used by every caller
+  // that wants to reconcile local state with the server after a push. If
+  // multiple pushRow calls are chained (e.g. bulk-save, rapid drags), only
+  // the last one to resolve will actually trigger the GET, preventing stale
+  // reads that snap the UI back to an older server state.
+  function fetchIfIdle(){
+    if(pendingWrites === 0) fetchAll();
+  }
+
   async function pushRow(tab, key, fields){
+    applyOptimisticPatch(tab, key, fields);
     pendingWrites++;
     updateSyncPill();
     try{
@@ -492,53 +585,11 @@
       if(!json.ok) throw new Error(json.error || 'push failed');
       lastSyncAt = new Date();
       setSyncStatus('ok');
-      // Optimistic local update so UI doesn't wait on next poll
-      const nowIso = new Date().toISOString();
-      const stamp = { UpdatedAt: nowIso, UpdatedBy: userName || 'anonymous' };
-      if(tab === 'Tasks'){
-        const i = taskState.findIndex(t => t.TaskId === key);
-        const patch = Object.assign({}, fields, stamp);
-        if(i >= 0) taskState[i] = Object.assign({}, taskState[i], patch);
-        else taskState.push(Object.assign({ TaskId: key, CreatedAt: nowIso }, patch));
-      } else if(tab === 'Team'){
-        const i = teamState.findIndex(m => m.MemberId === key);
-        const patch = Object.assign({}, fields, stamp);
-        if(i >= 0) teamState[i] = Object.assign({}, teamState[i], patch);
-        else teamState.push(Object.assign({ MemberId: key }, patch));
-      } else if(tab === 'Characters'){
-        const i = charactersState.findIndex(c => c.Id === key);
-        // AbilitiesJson → abilities array for renderCharacters
-        let abilities;
-        if (fields.AbilitiesJson !== undefined){
-          try { const p = JSON.parse(fields.AbilitiesJson); abilities = Array.isArray(p) ? p : []; }
-          catch(e){ abilities = []; }
-        } else if (i >= 0){
-          abilities = charactersState[i].abilities;
-        } else {
-          abilities = [];
-        }
-        const patch = Object.assign({}, fields, { abilities }, stamp);
-        if(i >= 0) charactersState[i] = Object.assign({}, charactersState[i], patch);
-        else charactersState.push(Object.assign({ Id: key, CreatedAt: nowIso }, patch));
-      } else if(tab === 'Items'){
-        const i = itemsState.findIndex(x => x.Id === key);
-        const patch = Object.assign({}, fields, stamp);
-        if(i >= 0) itemsState[i] = Object.assign({}, itemsState[i], patch);
-        else itemsState.push(Object.assign({ Id: key, CreatedAt: nowIso }, patch));
-      } else if(tab === 'Maps'){
-        const i = mapsState.findIndex(x => x.Id === key);
-        const patch = Object.assign({}, fields, stamp);
-        if(i >= 0) mapsState[i] = Object.assign({}, mapsState[i], patch);
-        else mapsState.push(Object.assign({ Id: key, CreatedAt: nowIso }, patch));
-      } else if(tab === 'Systems'){
-        const i = systemsState.findIndex(x => x.Id === key);
-        const patch = Object.assign({}, fields, stamp);
-        if(i >= 0) systemsState[i] = Object.assign({}, systemsState[i], patch);
-        else systemsState.push(Object.assign({ Id: key, CreatedAt: nowIso }, patch));
-      }
+      clearPendingFlag(tab, key);
     }catch(err){
       console.warn('[sync] push error:', err);
       setSyncStatus('error');
+      clearPendingFlag(tab, key);
       alert('Could not save to Google Sheet. Check your connection and try again.\n\n' + err.message);
     }finally{
       pendingWrites--;
@@ -766,7 +817,7 @@
     const upAt = t.UpdatedAt ? formatTimeAgo(t.UpdatedAt) : '';
     const metaLine = (upBy || upAt) ? `<div class="t-lastupdate">↻ ${escapeHtml(upBy || 'someone')}${upAt ? ' · '+upAt : ''}</div>` : '';
     return `
-      <div class="task phase-${t.Phase} st-${t.Status}" data-task-id="${escapeAttr(t.TaskId)}">
+      <div class="task phase-${t.Phase} st-${t.Status}${t._pending ? ' pending' : ''}" data-task-id="${escapeAttr(t.TaskId)}">
         <div class="t-head">
           <div class="t-title">${escapeHtml(t.Title)}</div>
           <div class="t-meta">Phase ${t.Phase} · Pri ${t.Priority.replace(/^P/,'')}</div>
@@ -793,8 +844,9 @@
         if(card){
           card.classList.remove('st-todo','st-progress','st-blocked','st-done');
           card.classList.add('st-'+v);
+          card.classList.add('pending');
         }
-        pushRow('Tasks', id, { Status: v }).then(() => fetchAll());
+        pushRow('Tasks', id, { Status: v }).then(() => renderBoard());
       });
     });
     qsa('.t-notes', host).forEach(ta => {
@@ -960,11 +1012,10 @@
             Hidden: false,
             SortOrder: 0,
           };
-          // Optimistic: mutate state, render, open modal immediately. Server sync in background.
-          ganttBarsState.push(normalizeGanttBarRow(fields));
+          const p = pushRow('GanttBars', newId, fields);
           renderGantt();
           openBarModal(newId);
-          pushRow('GanttBars', newId, fields).then(() => fetchAll());
+          p.then(fetchIfIdle);
         }
       });
     }
@@ -990,7 +1041,7 @@
     // Identity: read from localStorage on load. If not present, prompt after first fetch.
     try{ userName = localStorage.getItem(USER_KEY) || ''; }catch(e){}
     fetchAll();
-    setInterval(fetchAll, POLL_MS);
+    setInterval(fetchIfIdle, POLL_MS);
     // update the "synced Xs ago" pill every second
     setInterval(updateSyncPill, 1000);
   }
@@ -1076,8 +1127,9 @@
           fields.Notes = '';
         }
         closeModal();
-        await pushRow('Tasks', key, fields);
-        fetchAll();
+        const p = pushRow('Tasks', key, fields);
+        renderBoard();
+        p.then(fetchIfIdle);
       });
       if(!isNew){
         qs('[data-action="delete"]', panel).addEventListener('click', () => {
@@ -1090,10 +1142,11 @@
             </div>
           `;
           qs('[data-action="cancel-delete"]', footer).addEventListener('click', closeModal);
-          qs('[data-action="confirm-delete"]', footer).addEventListener('click', async () => {
+          qs('[data-action="confirm-delete"]', footer).addEventListener('click', () => {
             closeModal();
-            await pushRow('Tasks', t.TaskId, { Hidden: true });
-            fetchAll();
+            const p = pushRow('Tasks', t.TaskId, { Hidden: true });
+            renderBoard();
+            p.then(fetchIfIdle);
           });
         });
       }
@@ -1202,12 +1255,12 @@
             || orig.Order !== m.Order
             || orig.Active !== m.Active;
           if(changed){
-            await pushRow('Team', m.MemberId, {
+            pushRow('Team', m.MemberId, {
               Name: m.Name, RoleKey: m.RoleKey, RoleLabel: m.RoleLabel, Order: m.Order, Active: m.Active,
             });
           }
         }
-        fetchAll();
+        setTimeout(fetchIfIdle, 100);
       });
     }
 
@@ -1285,18 +1338,14 @@
     if(s !== dragState.origStart || en !== dragState.origEnd) dragState.moved = true;
   }
 
-  async function onBarPointerUp(e){
+  function onBarPointerUp(e){
     if(!dragState) return;
-    const { barId, el, origStart, origEnd, newStart, newEnd, moved } = dragState;
+    const { barId, origStart, origEnd, newStart, newEnd, moved } = dragState;
     cleanupDrag(e);
     if(!moved || (newStart === origStart && newEnd === origEnd)) return;
-    try{
-      await pushRow('GanttBars', barId, { Start: newStart, End: newEnd });
-      await fetchAll();
-    }catch(err){
-      console.warn('[drag] commit failed:', err);
-      el.style.gridColumn = `${origStart + 1} / span ${origEnd - origStart}`;
-    }
+    const p = pushRow('GanttBars', barId, { Start: newStart, End: newEnd });
+    renderGantt();
+    p.then(fetchIfIdle);
   }
 
   function onBarPointerCancel(e){
@@ -1358,11 +1407,9 @@
       qs('[data-action="delete"]', panel).addEventListener('click', () => {
         if(!confirm('Delete this bar?')) return;
         closeModal();
-        // Optimistic
-        const i = ganttBarsState.findIndex(b => b.BarId === bar.BarId);
-        if(i >= 0) ganttBarsState[i] = Object.assign({}, ganttBarsState[i], { Hidden: true });
+        const p = pushRow('GanttBars', bar.BarId, { Hidden: true });
         renderGantt();
-        pushRow('GanttBars', bar.BarId, { Hidden: true }).then(() => fetchAll());
+        p.then(fetchIfIdle);
       });
       qs('[data-action="save"]', panel).addEventListener('click', () => {
         const name = qs('#bar-name', panel).value.trim();
@@ -1371,12 +1418,10 @@
         const end = Number(qs('#bar-end', panel).value);
         if(end <= start){ alert('End must be after Start.'); return; }
         closeModal();
-        // Optimistic
         const patch = { Name: name, Color: color, Start: start, End: end };
-        const i = ganttBarsState.findIndex(b => b.BarId === bar.BarId);
-        if(i >= 0) ganttBarsState[i] = Object.assign({}, ganttBarsState[i], patch);
+        const p = pushRow('GanttBars', bar.BarId, patch);
         renderGantt();
-        pushRow('GanttBars', bar.BarId, patch).then(() => fetchAll());
+        p.then(fetchIfIdle);
       });
     });
   }
@@ -1412,11 +1457,10 @@
       qs('[data-action="delete"]', panel).addEventListener('click', () => {
         if(!confirm('Delete this milestone?')) return;
         closeModal();
-        const i = milestonesState.findIndex(x => x.MilestoneId === m.MilestoneId);
-        if(i >= 0) milestonesState[i] = Object.assign({}, milestonesState[i], { Hidden: true });
+        const p = pushRow('Milestones', m.MilestoneId, { Hidden: true });
         renderGantt();
         renderMilestones();
-        pushRow('Milestones', m.MilestoneId, { Hidden: true }).then(() => fetchAll());
+        p.then(fetchIfIdle);
       });
       qs('[data-action="save"]', panel).addEventListener('click', () => {
         const quarter = qs('#ms-quarter', panel).value;
@@ -1424,11 +1468,10 @@
         const goal = qs('#ms-goal', panel).value;
         closeModal();
         const patch = { Quarter: quarter, Name: name, Goal: goal };
-        const i = milestonesState.findIndex(x => x.MilestoneId === m.MilestoneId);
-        if(i >= 0) milestonesState[i] = Object.assign({}, milestonesState[i], patch);
+        const p = pushRow('Milestones', m.MilestoneId, patch);
         renderGantt();
         renderMilestones();
-        pushRow('Milestones', m.MilestoneId, patch).then(() => fetchAll());
+        p.then(fetchIfIdle);
       });
     });
   }
@@ -1451,12 +1494,11 @@
       Hidden: false,
       SortOrder: 0,
     };
-    // Optimistic
-    milestonesState.push(normalizeMilestoneRow(fields));
+    const p = pushRow('Milestones', newId, fields);
     renderGantt();
     renderMilestones();
     openMilestoneModal(newId);
-    pushRow('Milestones', newId, fields).then(() => fetchAll());
+    p.then(fetchIfIdle);
   }
 
   function openTracksModal(){
@@ -1553,12 +1595,12 @@
         rerender(root);
       });
       qs('[data-action="cancel"]', panel).addEventListener('click', closeModal);
-      qs('[data-action="save"]', panel).addEventListener('click', async () => {
+      qs('[data-action="save"]', panel).addEventListener('click', () => {
         closeModal();
         for(const t of draft){
           if(t._delete){
             if(!t._isNew){
-              await pushRow('GanttTracks', t.TrackId, { Hidden: true });
+              pushRow('GanttTracks', t.TrackId, { Hidden: true });
             }
             continue;
           }
@@ -1568,12 +1610,12 @@
             || orig.Role !== t.Role
             || orig.Order !== t.Order;
           if(changed){
-            await pushRow('GanttTracks', t.TrackId, {
+            pushRow('GanttTracks', t.TrackId, {
               TrackId: t.TrackId, Name: t.Name, Role: t.Role, Order: t.Order,
             });
           }
         }
-        fetchAll();
+        setTimeout(fetchIfIdle, 100);
       });
     }
 
@@ -1646,9 +1688,9 @@
           fields.Hidden = false;
         }
         closeModal();
-        await pushRow('Systems', key, fields);
+        const p = pushRow('Systems', key, fields);
         renderSystems();
-        fetchAll();
+        p.then(fetchIfIdle);
       });
       if(!isNew){
         qs('[data-action="delete"]', panel).addEventListener('click', () => {
@@ -1661,11 +1703,11 @@
             </div>
           `;
           qs('[data-action="cancel-delete"]', footer).addEventListener('click', closeModal);
-          qs('[data-action="confirm-delete"]', footer).addEventListener('click', async () => {
+          qs('[data-action="confirm-delete"]', footer).addEventListener('click', () => {
             closeModal();
-            await pushRow('Systems', s.Id, { Hidden: true });
+            const p = pushRow('Systems', s.Id, { Hidden: true });
             renderSystems();
-            fetchAll();
+            p.then(fetchIfIdle);
           });
         });
       }
@@ -1769,9 +1811,9 @@
           fields.Hidden = false;
         }
         closeModal();
-        await pushRow('Characters', key, fields);
+        const p = pushRow('Characters', key, fields);
         renderCharacters();
-        fetchAll();
+        p.then(fetchIfIdle);
       });
       if(!isNew){
         qs('[data-action="delete"]', panel).addEventListener('click', () => {
@@ -1784,11 +1826,11 @@
             </div>
           `;
           qs('[data-action="cancel-delete"]', footer).addEventListener('click', closeModal);
-          qs('[data-action="confirm-delete"]', footer).addEventListener('click', async () => {
+          qs('[data-action="confirm-delete"]', footer).addEventListener('click', () => {
             closeModal();
-            await pushRow('Characters', c.Id, { Hidden: true });
+            const p = pushRow('Characters', c.Id, { Hidden: true });
             renderCharacters();
-            fetchAll();
+            p.then(fetchIfIdle);
           });
         });
       }
@@ -1841,9 +1883,9 @@
           fields.Hidden = false;
         }
         closeModal();
-        await pushRow('Maps', key, fields);
+        const p = pushRow('Maps', key, fields);
         renderMaps();
-        fetchAll();
+        p.then(fetchIfIdle);
       });
       if(!isNew){
         qs('[data-action="delete"]', panel).addEventListener('click', () => {
@@ -1856,11 +1898,11 @@
             </div>
           `;
           qs('[data-action="cancel-delete"]', footer).addEventListener('click', closeModal);
-          qs('[data-action="confirm-delete"]', footer).addEventListener('click', async () => {
+          qs('[data-action="confirm-delete"]', footer).addEventListener('click', () => {
             closeModal();
-            await pushRow('Maps', m.Id, { Hidden: true });
+            const p = pushRow('Maps', m.Id, { Hidden: true });
             renderMaps();
-            fetchAll();
+            p.then(fetchIfIdle);
           });
         });
       }
@@ -1917,9 +1959,9 @@
           fields.Hidden = false;
         }
         closeModal();
-        await pushRow('Items', key, fields);
+        const p = pushRow('Items', key, fields);
         renderItems();
-        fetchAll();
+        p.then(fetchIfIdle);
       });
       if(!isNew){
         qs('[data-action="delete"]', panel).addEventListener('click', () => {
@@ -1932,11 +1974,11 @@
             </div>
           `;
           qs('[data-action="cancel-delete"]', footer).addEventListener('click', closeModal);
-          qs('[data-action="confirm-delete"]', footer).addEventListener('click', async () => {
+          qs('[data-action="confirm-delete"]', footer).addEventListener('click', () => {
             closeModal();
-            await pushRow('Items', it.Id, { Hidden: true });
+            const p = pushRow('Items', it.Id, { Hidden: true });
             renderItems();
-            fetchAll();
+            p.then(fetchIfIdle);
           });
         });
       }

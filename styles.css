@@ -514,3 +514,12 @@ html.zsp-locked body > *:not(#zsp-lock-gate) { display: none !important; }
 
 .modal-btn.danger{color:#b34a4a;border-color:#d9a0a0}
 .modal-btn.danger:hover{background:#fdeaea}
+
+/* ---- Optimistic UI: pending indicator ---- */
+.pending{
+  outline:1.5px dashed var(--ink-3);
+  outline-offset:-2px;
+  opacity:0.8;
+}
+.gbar.pending{outline-offset:-3px}
+tr.pending{outline:none;box-shadow:inset 4px 0 0 var(--ink-3)}
