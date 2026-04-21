@@ -382,6 +382,8 @@
       renderItems();
       renderMaps();
       renderSystems();
+      renderGantt();
+      renderMilestones();
       if(!userName){
         const n = (prompt('Enter your name — shown on tasks you create or update. You can change it later.') || '').trim();
         if(n){
