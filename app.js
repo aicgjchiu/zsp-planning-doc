@@ -59,15 +59,30 @@
       .sort((a,b) => (a.Order||0) - (b.Order||0));
 
     tracks.forEach(track => {
-      html += `<div class="gantt-row" data-track-id="${escapeHtml(track.TrackId)}">`;
+      const bars = ganttBarsState
+        .filter(b => b.TrackId === track.TrackId && !b.Hidden)
+        .slice()
+        .sort((a,b) => Number(a.Start) - Number(b.Start));
+      // Interval-pack: each bar gets a lane (grid-row) so overlaps stack vertically.
+      const laneEnds = []; // laneEnds[i] = end quarter of last bar on lane i
+      const laneByBar = {};
+      bars.forEach(b => {
+        const s = Number(b.Start), en = Number(b.End);
+        let lane = laneEnds.findIndex(end => end <= s);
+        if(lane < 0){ lane = laneEnds.length; laneEnds.push(en); }
+        else { laneEnds[lane] = en; }
+        laneByBar[b.BarId] = lane;
+      });
+      const laneCount = Math.max(1, laneEnds.length);
+
+      html += `<div class="gantt-row" data-track-id="${escapeHtml(track.TrackId)}" style="--lane-count:${laneCount}">`;
       html += `<div class="who"><span class="dot ${escapeHtml(track.Role)}"></span>${escapeHtml(track.Name)}</div>`;
       html += `<div class="track">`;
-      const bars = ganttBarsState
-        .filter(b => b.TrackId === track.TrackId && !b.Hidden);
       bars.forEach(b => {
         const col = Number(b.Start) + 1;
         const span = Math.max(1, Number(b.End) - Number(b.Start));
-        html += `<div class="gbar ${escapeHtml(b.Color || 'code')}" data-bar-id="${escapeHtml(b.BarId)}" style="grid-column:${col} / span ${span}" title="${escapeHtml(b.Name)}">`
+        const lane = (laneByBar[b.BarId] || 0) + 1;
+        html += `<div class="gbar ${escapeHtml(b.Color || 'code')}" data-bar-id="${escapeHtml(b.BarId)}" style="grid-column:${col} / span ${span};grid-row:${lane}" title="${escapeHtml(b.Name)}">`
               + `<span class="gbar-name">${escapeHtml(b.Name)}</span>`
               + `<button class="gbar-more" data-bar-id="${escapeHtml(b.BarId)}" ${gateAttr || 'title="Edit bar"'}>⋯</button>`
               + `</div>`;
@@ -941,6 +956,7 @@
             SortOrder: 0,
           });
           await fetchAll();
+          openBarModal(newId);
         }
       });
     }

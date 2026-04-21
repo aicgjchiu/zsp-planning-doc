@@ -153,7 +153,9 @@ table.sheet td.dim{color:var(--ink-3)}
 
 .gantt-row{
   display:grid;grid-template-columns:240px repeat(12, 120px);
-  border-bottom:1px solid var(--line);min-height:56px;
+  border-bottom:1px solid var(--line);
+  --lane-count:1;
+  min-height:calc(var(--lane-count) * 42px + 16px);
 }
 .gantt-row:last-child{border-bottom:none}
 .gantt-row .who{
@@ -164,7 +166,8 @@ table.sheet td.dim{color:var(--ink-3)}
 .gantt-row .track{
   position:relative;grid-column:2 / span 12;
   display:grid;grid-template-columns:repeat(12, 120px);
-  padding:8px 0;min-height:56px;
+  grid-auto-rows:42px;
+  padding:8px 0;
 }
 .gantt-row .track::before{
   content:'';position:absolute;inset:0;
@@ -173,7 +176,7 @@ table.sheet td.dim{color:var(--ink-3)}
   pointer-events:none;opacity:0.5;
 }
 .gbar{
-  grid-row:1;position:relative;height:38px;margin:auto 0;
+  position:relative;height:38px;align-self:center;
   border-radius:5px;font-family:var(--mono);font-size:11.5px;
   padding:6px 10px;
   display:flex;align-items:center;color:#fff;letter-spacing:0.01em;
@@ -473,10 +476,11 @@ html.zsp-locked body > *:not(#zsp-lock-gate) { display: none !important; }
 .gbar-more:disabled{cursor:not-allowed;opacity:0 !important}
 
 .gbar-add{
-  grid-column:1 / -1;justify-self:end;align-self:center;
+  grid-column:-2 / -1;grid-row:1;justify-self:end;align-self:center;
   background:transparent;border:1px dashed var(--line-2);color:var(--ink-3);
   font-family:var(--mono);font-size:12px;padding:2px 8px;border-radius:4px;
-  cursor:pointer;margin-left:4px;height:22px;
+  cursor:pointer;margin-right:4px;height:22px;
+  z-index:1;
 }
 .gbar-add:hover:not(:disabled){border-color:var(--ink-3);color:var(--ink)}
 .gbar-add:disabled{cursor:not-allowed;opacity:0.4}
