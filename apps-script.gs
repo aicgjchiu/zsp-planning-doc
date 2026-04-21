@@ -14,6 +14,8 @@ const SYSTEMS_SHEET      = 'Systems';
 const GANTT_TRACKS_SHEET = 'GanttTracks';
 const GANTT_BARS_SHEET   = 'GanttBars';
 const MILESTONES_SHEET   = 'Milestones';
+const TIMELINE_SHEET     = 'Timeline';
+const QUARTER_PLAN_SHEET = 'QuarterPlan';
 const CONFIG_SHEET       = 'Config'; // private — NEVER returned in GET
 
 function doGet(e) {
@@ -29,6 +31,8 @@ function doGet(e) {
     ganttTracks:  readTab(ss.getSheetByName(GANTT_TRACKS_SHEET)),
     ganttBars:    readTab(ss.getSheetByName(GANTT_BARS_SHEET)),
     milestones:   readTab(ss.getSheetByName(MILESTONES_SHEET)),
+    timeline:     (readTab(ss.getSheetByName(TIMELINE_SHEET))[0] || null),
+    quarterPlan:   readTab(ss.getSheetByName(QUARTER_PLAN_SHEET)),
   });
 }
 
