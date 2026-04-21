@@ -829,8 +829,9 @@
         if(card){
           card.classList.remove('st-todo','st-progress','st-blocked','st-done');
           card.classList.add('st-'+v);
+          card.classList.add('pending');
         }
-        pushRow('Tasks', id, { Status: v });
+        pushRow('Tasks', id, { Status: v }).then(() => renderBoard());
       });
     });
     qsa('.t-notes', host).forEach(ta => {
@@ -1111,7 +1112,9 @@
           fields.Notes = '';
         }
         closeModal();
-        pushRow('Tasks', key, fields).then(() => fetchAll());
+        const p = pushRow('Tasks', key, fields);
+        renderBoard();
+        p.then(() => fetchAll());
       });
       if(!isNew){
         qs('[data-action="delete"]', panel).addEventListener('click', () => {
@@ -1126,7 +1129,9 @@
           qs('[data-action="cancel-delete"]', footer).addEventListener('click', closeModal);
           qs('[data-action="confirm-delete"]', footer).addEventListener('click', () => {
             closeModal();
-            pushRow('Tasks', t.TaskId, { Hidden: true }).then(() => fetchAll());
+            const p = pushRow('Tasks', t.TaskId, { Hidden: true });
+            renderBoard();
+            p.then(() => fetchAll());
           });
         });
       }
@@ -1323,7 +1328,9 @@
     const { barId, origStart, origEnd, newStart, newEnd, moved } = dragState;
     cleanupDrag(e);
     if(!moved || (newStart === origStart && newEnd === origEnd)) return;
-    pushRow('GanttBars', barId, { Start: newStart, End: newEnd }).then(() => fetchAll());
+    const p = pushRow('GanttBars', barId, { Start: newStart, End: newEnd });
+    renderGantt();
+    p.then(() => fetchAll());
   }
 
   function onBarPointerCancel(e){
