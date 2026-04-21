@@ -1390,6 +1390,7 @@
 
   function onBarPointerMove(e){
     if(!dragState) return;
+    const totalQuarters = Math.max(1, Number(timelineState.TotalYears) || 3) * 4;
     const delta = Math.round((e.clientX - dragState.startX) / GANTT_COLUMN_PX);
     let s = dragState.origStart, en = dragState.origEnd;
     if(dragState.zone === 'move'){ s += delta; en += delta; }
@@ -1400,9 +1401,9 @@
       if(dragState.zone === 'move') en += (0 - s);
       s = 0;
     }
-    if(en > 12){
-      if(dragState.zone === 'move') s -= (en - 12);
-      en = 12;
+    if(en > totalQuarters){
+      if(dragState.zone === 'move') s -= (en - totalQuarters);
+      en = totalQuarters;
     }
     if(en - s < 1){
       if(dragState.zone === 'start') s = en - 1;
@@ -1448,16 +1449,18 @@
     const bar = ganttBarsState.find(b => b.BarId === barId);
     if(!bar){ alert('Bar not found.'); return; }
     const COLOR_OPTS = ['portal','code','char','env','vfx'];
+    const totalYears    = Math.max(1, Number(timelineState.TotalYears) || 3);
+    const totalQuarters = totalYears * 4;
 
     const startOpts = [];
-    for(let i = 0; i <= 11; i++){
+    for(let i = 0; i < totalQuarters; i++){
       const y = Math.floor(i/4) + 1, q = (i % 4) + 1;
       startOpts.push(`<option value="${i}" ${Number(bar.Start)===i?'selected':''}>Y${y} Q${q}</option>`);
     }
     const endOpts = [];
-    for(let i = 1; i <= 12; i++){
+    for(let i = 1; i <= totalQuarters; i++){
       const y = Math.floor((i-1)/4) + 1, q = ((i-1) % 4) + 1;
-      const label = (i === 12) ? 'end of Y3 Q4' : `Y${y} Q${q} (end)`;
+      const label = (i === totalQuarters) ? `end of Y${totalYears} Q4` : `Y${y} Q${q} (end)`;
       endOpts.push(`<option value="${i}" ${Number(bar.End)===i?'selected':''}>${label}</option>`);
     }
     const colorOpts = COLOR_OPTS.map(c => `<option value="${c}" ${bar.Color===c?'selected':''}>${c}</option>`).join('');
@@ -1506,9 +1509,10 @@
   function openMilestoneModal(milestoneId){
     const m = milestonesState.find(x => x.MilestoneId === milestoneId);
     if(!m){ alert('Milestone not found.'); return; }
+    const totalYears = Math.max(1, Number(timelineState.TotalYears) || 3);
 
     const quarterOpts = [];
-    for(let y = 1; y <= 3; y++) for(let q = 1; q <= 4; q++){
+    for(let y = 1; y <= totalYears; y++) for(let q = 1; q <= 4; q++){
       const s = `Y${y} Q${q}`;
       quarterOpts.push(`<option value="${s}" ${m.Quarter===s?'selected':''}>${s}</option>`);
     }
@@ -1554,11 +1558,12 @@
   }
 
   function addMilestone(){
+    const totalYears = Math.max(1, Number(timelineState.TotalYears) || 3);
     const taken = new Set(
       milestonesState.filter(m => !m.Hidden).map(m => m.Quarter)
     );
     let quarter = 'Y1 Q1';
-    outer: for(let y = 1; y <= 3; y++) for(let q = 1; q <= 4; q++){
+    outer: for(let y = 1; y <= totalYears; y++) for(let q = 1; q <= 4; q++){
       const s = `Y${y} Q${q}`;
       if(!taken.has(s)){ quarter = s; break outer; }
     }
