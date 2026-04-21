@@ -27,12 +27,12 @@
   });
 
   // --- Render: Gantt ---
-  // Quarter strings: "Y1 Q2" -> 1 (0-based quarter index across the 12-quarter span).
+  // Quarter strings: "Y1 Q2" -> 1 (0-based quarter index). Caller filters by totalQuarters.
   function parseQuarter(s){
     const m = /^Y(\d)\s*Q(\d)$/.exec(String(s || '').trim());
     if(!m) return -1;
     const idx = (Number(m[1]) - 1) * 4 + (Number(m[2]) - 1);
-    return (idx >= 0 && idx < 12) ? idx : -1;
+    return idx >= 0 ? idx : -1;
   }
 
   function renderGantt(){
@@ -40,11 +40,15 @@
     if(!host) return;
     const canEdit = !!userName;
     const gateAttr = canEdit ? '' : 'disabled title="Set your name first"';
+    const totalYears    = Math.max(1, Number(timelineState.TotalYears) || 3);
+    const totalQuarters = totalYears * 4;
+    host.style.setProperty('--total-quarters', totalQuarters);
+
     let html = '';
-    // header — single grid, 240px label + 12 × 120px quarters
+    // header — 240px label + totalQuarters × 120px
     html += '<div class="gantt-header">';
     html += '<div class="lane-label">Track / Owner</div>';
-    for(let y=1;y<=3;y++){
+    for(let y=1;y<=totalYears;y++){
       for(let q=1;q<=4;q++){
         const yStart = q===1 ? 'year-start' : '';
         html += `<div class="qh ${yStart}">Y${y} · Q${q}</div>`;
@@ -60,11 +64,16 @@
 
     tracks.forEach(track => {
       const bars = ganttBarsState
-        .filter(b => b.TrackId === track.TrackId && !b.Hidden)
+        .filter(b => {
+          if(b.TrackId !== track.TrackId || b.Hidden) return false;
+          if(Number(b.Start) >= totalQuarters || Number(b.End) > totalQuarters){
+            console.warn(`[timeline] skipped Bar ${b.BarId}: extends past Y${totalYears} Q4`);
+            return false;
+          }
+          return true;
+        })
         .slice()
         // Stable ordering by BarId (creation time) — NOT by Start.
-        // Sorting by Start would cause bars to swap lanes on drag; this keeps
-        // each bar's lane stable so dragging moves only that bar.
         .sort((a,b) => String(a.BarId).localeCompare(String(b.BarId)));
       // Pack into lanes: per-lane list of { start, end } ranges. A bar takes
       // the lowest-index lane where it doesn't overlap any existing range.
@@ -107,6 +116,10 @@
         const qIdx = parseQuarter(m.Quarter);
         if(qIdx < 0){
           console.warn(`[gantt] invalid milestone quarter: ${m.Quarter}`);
+          return;
+        }
+        if(qIdx >= totalQuarters){
+          console.warn(`[timeline] skipped Milestone ${m.MilestoneId}: ${m.Quarter} is past Y${totalYears} Q4`);
           return;
         }
         const title = (m.Goal ? `${m.Name} — ${m.Goal}` : m.Name);
