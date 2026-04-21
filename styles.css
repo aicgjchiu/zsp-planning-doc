@@ -454,3 +454,53 @@ html.zsp-locked body > *:not(#zsp-lock-gate) { display: none !important; }
   padding: 3px 5px; border: 1px solid var(--line); border-radius: 4px; background: #fff; color: var(--ink);
 }
 .abilities-subtable textarea { min-height: 44px; resize: vertical; }
+
+/* ---- Roadmap editable ---- */
+.roadmap-controls{display:flex;gap:8px;margin-top:10px}
+#tracks-btn{font-family:var(--mono);font-size:11.5px}
+
+.gbar{cursor:grab;user-select:none;gap:6px}
+.gbar:active{cursor:grabbing}
+.gbar.dragging{opacity:0.75;box-shadow:0 2px 8px rgba(0,0,0,0.25)}
+.gbar-name{flex:1;min-width:0;overflow:hidden}
+.gbar-more{
+  flex:0 0 auto;background:transparent;border:none;color:rgba(255,255,255,0.85);
+  font-size:14px;line-height:1;padding:2px 4px;border-radius:3px;cursor:pointer;
+  opacity:0;transition:opacity 80ms;
+}
+.gbar:hover .gbar-more{opacity:1}
+.gbar-more:hover{background:rgba(0,0,0,0.18)}
+.gbar-more:disabled{cursor:not-allowed;opacity:0 !important}
+
+.gbar-add{
+  grid-column:1 / -1;justify-self:end;align-self:center;
+  background:transparent;border:1px dashed var(--line-2);color:var(--ink-3);
+  font-family:var(--mono);font-size:12px;padding:2px 8px;border-radius:4px;
+  cursor:pointer;margin-left:4px;height:22px;
+}
+.gbar-add:hover:not(:disabled){border-color:var(--ink-3);color:var(--ink)}
+.gbar-add:disabled{cursor:not-allowed;opacity:0.4}
+
+.gantt-milestone-row .gbar{cursor:default}
+.gantt-milestone-row .gbar:active{cursor:default}
+
+.milestone-strip{position:relative}
+.milestone-strip .ms{position:relative}
+.ms-more{
+  position:absolute;top:6px;right:6px;background:transparent;border:none;
+  color:var(--ink-3);font-size:14px;line-height:1;padding:2px 6px;border-radius:3px;
+  cursor:pointer;opacity:0;transition:opacity 80ms;
+}
+.milestone-strip .ms:hover .ms-more{opacity:1}
+.ms-more:hover{background:var(--bg-3);color:var(--ink)}
+.ms-more:disabled{cursor:not-allowed;opacity:0 !important}
+.ms-add{
+  padding:14px;background:transparent;border:1.5px dashed var(--line-2);border-radius:8px;
+  color:var(--ink-3);font-size:20px;cursor:pointer;font-family:var(--mono);
+  display:flex;align-items:center;justify-content:center;
+}
+.ms-add:hover:not(:disabled){border-color:var(--ink-3);color:var(--ink)}
+.ms-add:disabled{cursor:not-allowed;opacity:0.4}
+
+.modal-btn.danger{color:#b34a4a;border-color:#d9a0a0}
+.modal-btn.danger:hover{background:#fdeaea}

@@ -38,6 +38,8 @@
   function renderGantt(){
     const host = qs('#gantt');
     if(!host) return;
+    const canEdit = !!userName;
+    const gateAttr = canEdit ? '' : 'disabled title="Set your name first"';
     let html = '';
     // header — single grid, 240px label + 12 × 120px quarters
     html += '<div class="gantt-header">';
@@ -65,8 +67,12 @@
       bars.forEach(b => {
         const col = Number(b.Start) + 1;
         const span = Math.max(1, Number(b.End) - Number(b.Start));
-        html += `<div class="gbar ${escapeHtml(b.Color || 'code')}" data-bar-id="${escapeHtml(b.BarId)}" style="grid-column:${col} / span ${span}" title="${escapeHtml(b.Name)}">${escapeHtml(b.Name)}</div>`;
+        html += `<div class="gbar ${escapeHtml(b.Color || 'code')}" data-bar-id="${escapeHtml(b.BarId)}" style="grid-column:${col} / span ${span}" title="${escapeHtml(b.Name)}">`
+              + `<span class="gbar-name">${escapeHtml(b.Name)}</span>`
+              + `<button class="gbar-more" data-bar-id="${escapeHtml(b.BarId)}" ${gateAttr || 'title="Edit bar"'}>⋯</button>`
+              + `</div>`;
       });
+      html += `<button class="gbar-add" data-track-id="${escapeHtml(track.TrackId)}" ${gateAttr || 'title="Add bar to this track"'}>＋</button>`;
       html += `</div></div>`;
     });
 
@@ -94,6 +100,8 @@
   function renderMilestones(){
     const host = qs('#milestones');
     if(!host) return;
+    const canEdit = !!userName;
+    const gateAttr = canEdit ? '' : 'disabled title="Set your name first"';
     const active = milestonesState
       .filter(m => !m.Hidden)
       .slice()
@@ -101,14 +109,14 @@
 
     const cards = active.map(m => `
       <div class="ms" data-milestone-id="${escapeHtml(m.MilestoneId)}">
-        <button class="ms-more" data-milestone-id="${escapeHtml(m.MilestoneId)}" title="Edit milestone">⋯</button>
+        <button class="ms-more" data-milestone-id="${escapeHtml(m.MilestoneId)}" ${gateAttr || 'title="Edit milestone"'}>⋯</button>
         <div class="q">${escapeHtml(m.Quarter)}</div>
         <div class="name">${escapeHtml(m.Name)}</div>
         <div class="goal">${escapeHtml(m.Goal || '')}</div>
       </div>
     `).join('');
 
-    host.innerHTML = cards + `<button class="ms-add" id="milestone-add-btn" title="Add milestone">＋</button>`;
+    host.innerHTML = cards + `<button class="ms-add" id="milestone-add-btn" ${gateAttr || 'title="Add milestone"'}>＋</button>`;
   }
 
   // --- Render: Phases table ---
@@ -381,6 +389,8 @@
           try{ localStorage.setItem(USER_KEY, n); }catch(e){}
           updateSyncPill();
           renderBoard();
+          renderGantt();
+          renderMilestones();
         }
       }
       await bootstrapIfEmpty();
@@ -872,6 +882,8 @@
           try{ localStorage.setItem(USER_KEY, n); }catch(e){}
           updateSyncPill();
           renderBoard();
+          renderGantt();
+          renderMilestones();
         }
       });
     }
@@ -881,6 +893,70 @@
       teamBtn.addEventListener('click', () => {
         if(!userName){ alert('Set your name first (click "Change name").'); return; }
         openTeamModal();
+      });
+    }
+    // tracks button (Roadmap tab)
+    const tracksBtn = qs('#tracks-btn');
+    if(tracksBtn){
+      tracksBtn.addEventListener('click', () => {
+        if(!userName){ alert('Set your name first (click "Change name").'); return; }
+        openTracksModal();
+      });
+    }
+
+    // Gantt bar drag — pointerdown delegation on #gantt (user tracks only)
+    const ganttForDrag = qs('#gantt');
+    if(ganttForDrag){
+      ganttForDrag.addEventListener('pointerdown', onGanttPointerDown);
+    }
+
+    // Gantt bar actions — event delegation on #gantt
+    const gantt = qs('#gantt');
+    if(gantt){
+      gantt.addEventListener('click', async (e) => {
+        const moreBtn = e.target.closest('.gbar-more');
+        if(moreBtn){
+          e.stopPropagation();
+          if(!userName){ alert('Set your name first (click "Change name").'); return; }
+          openBarModal(moreBtn.getAttribute('data-bar-id'));
+          return;
+        }
+        const addBtn = e.target.closest('.gbar-add');
+        if(addBtn){
+          if(!userName){ alert('Set your name first (click "Change name").'); return; }
+          const trackId = addBtn.getAttribute('data-track-id');
+          const track = ganttTracksState.find(t => t.TrackId === trackId);
+          if(!track) return;
+          const newId = genId('bar');
+          await pushRow('GanttBars', newId, {
+            BarId: newId,
+            TrackId: trackId,
+            Name: 'New bar',
+            Start: 0,
+            End: 1,
+            Color: track.Role || 'code',
+            Hidden: false,
+            SortOrder: 0,
+          });
+          await fetchAll();
+        }
+      });
+    }
+
+    // Milestone strip actions — event delegation
+    const msStrip = qs('#milestones');
+    if(msStrip){
+      msStrip.addEventListener('click', async (e) => {
+        const moreBtn = e.target.closest('.ms-more');
+        if(moreBtn){
+          if(!userName){ alert('Set your name first (click "Change name").'); return; }
+          openMilestoneModal(moreBtn.getAttribute('data-milestone-id'));
+          return;
+        }
+        if(e.target.closest('#milestone-add-btn')){
+          if(!userName){ alert('Set your name first (click "Change name").'); return; }
+          await addMilestone();
+        }
       });
     }
 
@@ -1102,6 +1178,357 @@
           if(changed){
             await pushRow('Team', m.MemberId, {
               Name: m.Name, RoleKey: m.RoleKey, RoleLabel: m.RoleLabel, Order: m.Order, Active: m.Active,
+            });
+          }
+        }
+        fetchAll();
+      });
+    }
+
+    const root = qs('#modal-root');
+    rerender(root);
+    root.classList.add('open');
+    document.addEventListener('keydown', modalKeyHandler);
+  }
+
+  // --- Gantt bar drag (user tracks only, identity-gated) ---
+  const GANTT_COLUMN_PX = 120;
+  let dragState = null;
+
+  function onGanttPointerDown(e){
+    if(!userName) return;
+    // Ignore clicks on the ⋯ and ＋ buttons — let them bubble to the click handler.
+    if(e.target.closest('.gbar-more') || e.target.closest('.gbar-add')) return;
+    const el = e.target.closest('.gbar');
+    if(!el) return;
+    // Milestone row is read-only.
+    if(el.closest('.gantt-milestone-row')) return;
+    const barId = el.getAttribute('data-bar-id');
+    const bar = ganttBarsState.find(b => b.BarId === barId);
+    if(!bar) return;
+
+    const rect = el.getBoundingClientRect();
+    const offsetX = e.clientX - rect.left;
+    let zone;
+    if(offsetX < 8) zone = 'start';
+    else if(offsetX > rect.width - 8) zone = 'end';
+    else zone = 'move';
+
+    dragState = {
+      barId, zone, el,
+      origStart: Number(bar.Start),
+      origEnd: Number(bar.End),
+      startX: e.clientX,
+      newStart: Number(bar.Start),
+      newEnd: Number(bar.End),
+      moved: false,
+    };
+    try{ el.setPointerCapture(e.pointerId); }catch(err){}
+    el.classList.add('dragging');
+    document.body.style.cursor = (zone === 'move') ? 'grabbing' : 'ew-resize';
+    el.addEventListener('pointermove', onBarPointerMove);
+    el.addEventListener('pointerup', onBarPointerUp);
+    el.addEventListener('pointercancel', onBarPointerCancel);
+    e.preventDefault();
+  }
+
+  function onBarPointerMove(e){
+    if(!dragState) return;
+    const delta = Math.round((e.clientX - dragState.startX) / GANTT_COLUMN_PX);
+    let s = dragState.origStart, en = dragState.origEnd;
+    if(dragState.zone === 'move'){ s += delta; en += delta; }
+    else if(dragState.zone === 'start'){ s += delta; }
+    else if(dragState.zone === 'end'){ en += delta; }
+    // Clamps
+    if(s < 0){
+      if(dragState.zone === 'move') en += (0 - s);
+      s = 0;
+    }
+    if(en > 12){
+      if(dragState.zone === 'move') s -= (en - 12);
+      en = 12;
+    }
+    if(en - s < 1){
+      if(dragState.zone === 'start') s = en - 1;
+      else if(dragState.zone === 'end') en = s + 1;
+      else { en = s + 1; }
+    }
+    dragState.el.style.gridColumn = `${s + 1} / span ${en - s}`;
+    dragState.newStart = s;
+    dragState.newEnd = en;
+    if(s !== dragState.origStart || en !== dragState.origEnd) dragState.moved = true;
+  }
+
+  async function onBarPointerUp(e){
+    if(!dragState) return;
+    const { barId, el, origStart, origEnd, newStart, newEnd, moved } = dragState;
+    cleanupDrag(e);
+    if(!moved || (newStart === origStart && newEnd === origEnd)) return;
+    try{
+      await pushRow('GanttBars', barId, { Start: newStart, End: newEnd });
+      await fetchAll();
+    }catch(err){
+      console.warn('[drag] commit failed:', err);
+      el.style.gridColumn = `${origStart + 1} / span ${origEnd - origStart}`;
+    }
+  }
+
+  function onBarPointerCancel(e){
+    if(!dragState) return;
+    const { el, origStart, origEnd } = dragState;
+    el.style.gridColumn = `${origStart + 1} / span ${origEnd - origStart}`;
+    cleanupDrag(e);
+  }
+
+  function cleanupDrag(e){
+    if(!dragState) return;
+    const { el } = dragState;
+    el.classList.remove('dragging');
+    document.body.style.cursor = '';
+    el.removeEventListener('pointermove', onBarPointerMove);
+    el.removeEventListener('pointerup', onBarPointerUp);
+    el.removeEventListener('pointercancel', onBarPointerCancel);
+    try{ el.releasePointerCapture(e.pointerId); }catch(err){}
+    dragState = null;
+  }
+
+  function openBarModal(barId){
+    const bar = ganttBarsState.find(b => b.BarId === barId);
+    if(!bar){ alert('Bar not found.'); return; }
+    const COLOR_OPTS = ['portal','code','char','env','vfx'];
+
+    const startOpts = [];
+    for(let i = 0; i <= 11; i++){
+      const y = Math.floor(i/4) + 1, q = (i % 4) + 1;
+      startOpts.push(`<option value="${i}" ${Number(bar.Start)===i?'selected':''}>Y${y} Q${q}</option>`);
+    }
+    const endOpts = [];
+    for(let i = 1; i <= 12; i++){
+      const y = Math.floor((i-1)/4) + 1, q = ((i-1) % 4) + 1;
+      const label = (i === 12) ? 'end of Y3 Q4' : `Y${y} Q${q} (end)`;
+      endOpts.push(`<option value="${i}" ${Number(bar.End)===i?'selected':''}>${label}</option>`);
+    }
+    const colorOpts = COLOR_OPTS.map(c => `<option value="${c}" ${bar.Color===c?'selected':''}>${c}</option>`).join('');
+
+    const html = `
+      <div class="modal-panel" data-panel style="max-width:520px">
+        <h3>Edit bar</h3>
+        <label>Name <input type="text" id="bar-name" value="${escapeAttr(bar.Name)}"></label>
+        <label>Color <select id="bar-color">${colorOpts}</select></label>
+        <label>Start <select id="bar-start">${startOpts.join('')}</select></label>
+        <label>End <select id="bar-end">${endOpts.join('')}</select></label>
+        <div class="modal-footer">
+          <button class="modal-btn danger" data-action="delete">Delete</button>
+          <div class="right">
+            <button class="modal-btn" data-action="cancel">Cancel</button>
+            <button class="modal-btn primary" data-action="save">Save</button>
+          </div>
+        </div>
+      </div>
+    `;
+    openModal(html, (root) => {
+      const panel = qs('[data-panel]', root);
+      qs('[data-action="cancel"]', panel).addEventListener('click', closeModal);
+      qs('[data-action="delete"]', panel).addEventListener('click', async () => {
+        if(!confirm('Delete this bar?')) return;
+        closeModal();
+        await pushRow('GanttBars', bar.BarId, { Hidden: true });
+        await fetchAll();
+      });
+      qs('[data-action="save"]', panel).addEventListener('click', async () => {
+        const name = qs('#bar-name', panel).value.trim();
+        const color = qs('#bar-color', panel).value;
+        const start = Number(qs('#bar-start', panel).value);
+        const end = Number(qs('#bar-end', panel).value);
+        if(end <= start){ alert('End must be after Start.'); return; }
+        closeModal();
+        await pushRow('GanttBars', bar.BarId, {
+          Name: name, Color: color, Start: start, End: end,
+        });
+        await fetchAll();
+      });
+    });
+  }
+
+  function openMilestoneModal(milestoneId){
+    const m = milestonesState.find(x => x.MilestoneId === milestoneId);
+    if(!m){ alert('Milestone not found.'); return; }
+
+    const quarterOpts = [];
+    for(let y = 1; y <= 3; y++) for(let q = 1; q <= 4; q++){
+      const s = `Y${y} Q${q}`;
+      quarterOpts.push(`<option value="${s}" ${m.Quarter===s?'selected':''}>${s}</option>`);
+    }
+
+    const html = `
+      <div class="modal-panel" data-panel style="max-width:520px">
+        <h3>Edit milestone</h3>
+        <label>Quarter <select id="ms-quarter">${quarterOpts.join('')}</select></label>
+        <label>Name <input type="text" id="ms-name" value="${escapeAttr(m.Name)}"></label>
+        <label>Goal <textarea id="ms-goal" rows="4">${escapeHtml(m.Goal || '')}</textarea></label>
+        <div class="modal-footer">
+          <button class="modal-btn danger" data-action="delete">Delete</button>
+          <div class="right">
+            <button class="modal-btn" data-action="cancel">Cancel</button>
+            <button class="modal-btn primary" data-action="save">Save</button>
+          </div>
+        </div>
+      </div>
+    `;
+    openModal(html, (root) => {
+      const panel = qs('[data-panel]', root);
+      qs('[data-action="cancel"]', panel).addEventListener('click', closeModal);
+      qs('[data-action="delete"]', panel).addEventListener('click', async () => {
+        if(!confirm('Delete this milestone?')) return;
+        closeModal();
+        await pushRow('Milestones', m.MilestoneId, { Hidden: true });
+        await fetchAll();
+      });
+      qs('[data-action="save"]', panel).addEventListener('click', async () => {
+        const quarter = qs('#ms-quarter', panel).value;
+        const name = qs('#ms-name', panel).value.trim();
+        const goal = qs('#ms-goal', panel).value;
+        closeModal();
+        await pushRow('Milestones', m.MilestoneId, {
+          Quarter: quarter, Name: name, Goal: goal,
+        });
+        await fetchAll();
+      });
+    });
+  }
+
+  async function addMilestone(){
+    const taken = new Set(
+      milestonesState.filter(m => !m.Hidden).map(m => m.Quarter)
+    );
+    let quarter = 'Y1 Q1';
+    outer: for(let y = 1; y <= 3; y++) for(let q = 1; q <= 4; q++){
+      const s = `Y${y} Q${q}`;
+      if(!taken.has(s)){ quarter = s; break outer; }
+    }
+    const newId = genId('ms');
+    await pushRow('Milestones', newId, {
+      MilestoneId: newId,
+      Quarter: quarter,
+      Name: 'New milestone',
+      Goal: '',
+      Hidden: false,
+      SortOrder: 0,
+    });
+    await fetchAll();
+  }
+
+  function openTracksModal(){
+    const draft = ganttTracksState.filter(t => !t.Hidden).map(t => Object.assign({}, t));
+    const ROLE_OPTS = ['portal','code','char','env','vfx'];
+
+    function panelHtml(){
+      const sorted = draft.slice().sort((a,b) => (a.Order||0) - (b.Order||0));
+      const roleOpts = (sel) => ROLE_OPTS.map(r => `<option value="${r}" ${sel===r?'selected':''}>${r}</option>`).join('');
+      const rows = sorted.map((t, i) => `
+        <tr data-track-id="${escapeAttr(t.TrackId)}">
+          <td><input type="text" data-f="Name" value="${escapeAttr(t.Name)}"></td>
+          <td><select data-f="Role">${roleOpts(t.Role)}</select></td>
+          <td class="mono-cell">${t.Order}</td>
+          <td>
+            <button class="modal-btn" data-action="up" ${i===0?'disabled':''}>↑</button>
+            <button class="modal-btn" data-action="down" ${i===sorted.length-1?'disabled':''}>↓</button>
+          </td>
+          <td><button class="modal-btn danger" data-action="delete">Delete</button></td>
+        </tr>
+      `).join('');
+      return `
+        <div class="modal-panel" data-panel style="max-width:720px">
+          <h3>Manage Roadmap Tracks</h3>
+          <p class="small" style="color:var(--ink-3);margin-top:-8px">Delete soft-hides the track; its bars stay in the sheet.</p>
+          <table class="sheet">
+            <thead><tr><th>Name</th><th>Role</th><th>Order</th><th style="width:90px">Reorder</th><th style="width:90px">Delete</th></tr></thead>
+            <tbody>${rows}</tbody>
+          </table>
+          <div><button class="modal-btn" data-action="add-track">+ Add track</button></div>
+          <div class="modal-footer">
+            <div class="right">
+              <button class="modal-btn" data-action="cancel">Cancel</button>
+              <button class="modal-btn primary" data-action="save">Save</button>
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    function rerender(root){
+      root.innerHTML = `<div class="modal-overlay" data-overlay>${panelHtml()}</div>`;
+      wire(root);
+    }
+
+    function wire(root){
+      const overlay = qs('[data-overlay]', root);
+      overlay.addEventListener('click', (e) => { if(e.target === overlay) closeModal(); });
+      const panel = qs('[data-panel]', root);
+      qsa('tr[data-track-id]', panel).forEach(tr => {
+        const id = tr.getAttribute('data-track-id');
+        const t = draft.find(x => x.TrackId === id);
+        qsa('[data-f]', tr).forEach(el => {
+          el.addEventListener('change', () => {
+            const k = el.getAttribute('data-f');
+            t[k] = el.value;
+          });
+        });
+        qs('[data-action="up"]', tr).addEventListener('click', () => {
+          const sorted = draft.filter(x => !x._delete).slice().sort((a,b) => (a.Order||0) - (b.Order||0));
+          const idx = sorted.findIndex(x => x.TrackId === id);
+          if(idx > 0){
+            const a = sorted[idx-1], b = sorted[idx];
+            const tmp = a.Order; a.Order = b.Order; b.Order = tmp;
+            rerender(root);
+          }
+        });
+        qs('[data-action="down"]', tr).addEventListener('click', () => {
+          const sorted = draft.filter(x => !x._delete).slice().sort((a,b) => (a.Order||0) - (b.Order||0));
+          const idx = sorted.findIndex(x => x.TrackId === id);
+          if(idx >= 0 && idx < sorted.length - 1){
+            const a = sorted[idx], b = sorted[idx+1];
+            const tmp = a.Order; a.Order = b.Order; b.Order = tmp;
+            rerender(root);
+          }
+        });
+        qs('[data-action="delete"]', tr).addEventListener('click', () => {
+          if(!confirm(`Delete track "${t.Name}"? Its bars will be hidden too.`)) return;
+          t._delete = true;
+          rerender(root);
+        });
+      });
+      qs('[data-action="add-track"]', panel).addEventListener('click', () => {
+        const maxOrder = draft.reduce((m,x) => Math.max(m, x.Order||0), -1);
+        draft.push({
+          TrackId: genId('track'),
+          Name: 'New track',
+          Role: 'code',
+          Order: maxOrder + 1,
+          Hidden: false,
+          SortOrder: maxOrder + 1,
+          _isNew: true,
+        });
+        rerender(root);
+      });
+      qs('[data-action="cancel"]', panel).addEventListener('click', closeModal);
+      qs('[data-action="save"]', panel).addEventListener('click', async () => {
+        closeModal();
+        for(const t of draft){
+          if(t._delete){
+            if(!t._isNew){
+              await pushRow('GanttTracks', t.TrackId, { Hidden: true });
+            }
+            continue;
+          }
+          const orig = ganttTracksState.find(x => x.TrackId === t.TrackId);
+          const changed = !orig
+            || orig.Name !== t.Name
+            || orig.Role !== t.Role
+            || orig.Order !== t.Order;
+          if(changed){
+            await pushRow('GanttTracks', t.TrackId, {
+              TrackId: t.TrackId, Name: t.Name, Role: t.Role, Order: t.Order,
             });
           }
         }
