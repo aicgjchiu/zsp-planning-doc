@@ -79,7 +79,7 @@
         else { laneRanges[lane].push({s, e: en}); }
         laneByBar[b.BarId] = lane;
       });
-      const laneCount = Math.max(1, laneEnds.length);
+      const laneCount = Math.max(1, laneRanges.length);
 
       html += `<div class="gantt-row" data-track-id="${escapeHtml(track.TrackId)}" style="--lane-count:${laneCount}">`;
       html += `<div class="who"><span class="dot ${escapeHtml(track.Role)}"></span>${escapeHtml(track.Name)}</div>`;
