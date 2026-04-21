@@ -359,6 +359,8 @@
   let ganttTracksState = [];       // array of GanttTrack objects
   let ganttBarsState   = [];       // array of GanttBar objects
   let milestonesState  = [];       // array of Milestone objects
+  let timelineState    = { TotalYears: 3 }; // singleton; sheet row merged over this default
+  let quarterPlanState = [];       // array of QuarterPlan objects
   let userName        = '';        // cached identity
   let syncStatus      = 'idle';
   let lastSyncAt      = null;
@@ -392,6 +394,8 @@
       ganttTracksState = (json.ganttTracks || []).map(normalizeGanttTrackRow);
       ganttBarsState   = (json.ganttBars   || []).map(normalizeGanttBarRow);
       milestonesState  = (json.milestones  || []).map(normalizeMilestoneRow);
+      timelineState    = normalizeTimelineRow(json.timeline);
+      quarterPlanState = (json.quarterPlan || []).map(normalizeQuarterPlanRow);
       lastSyncAt = new Date();
       setSyncStatus('ok');
       const anyEmpty =
@@ -538,10 +542,26 @@
       const patch = Object.assign({}, fields, stamp);
       if(i >= 0) milestonesState[i] = Object.assign({}, milestonesState[i], patch);
       else       milestonesState.push(Object.assign({ MilestoneId: key, CreatedAt: nowIso }, patch));
+    } else if(tab === 'Timeline'){
+      // Singleton — merge into the object, not an array.
+      timelineState = Object.assign({}, timelineState, fields, stamp);
+    } else if(tab === 'QuarterPlan'){
+      const i = quarterPlanState.findIndex(x => x.QuarterId === key);
+      const patch = Object.assign({}, fields, stamp);
+      if(i >= 0) quarterPlanState[i] = Object.assign({}, quarterPlanState[i], patch);
+      else       quarterPlanState.push(Object.assign({ QuarterId: key, CreatedAt: nowIso }, patch));
     }
   }
 
   function clearPendingFlag(tab, key){
+    if(tab === 'Timeline'){
+      if(timelineState && timelineState._pending){
+        const copy = Object.assign({}, timelineState);
+        delete copy._pending;
+        timelineState = copy;
+      }
+      return;
+    }
     const target =
       tab === 'Tasks'       ? { arr: taskState,        idField: 'TaskId'      } :
       tab === 'Team'        ? { arr: teamState,        idField: 'MemberId'    } :
@@ -551,7 +571,8 @@
       tab === 'Systems'     ? { arr: systemsState,     idField: 'Id'          } :
       tab === 'GanttTracks' ? { arr: ganttTracksState, idField: 'TrackId'     } :
       tab === 'GanttBars'   ? { arr: ganttBarsState,   idField: 'BarId'       } :
-      tab === 'Milestones'  ? { arr: milestonesState,  idField: 'MilestoneId' } : null;
+      tab === 'Milestones'  ? { arr: milestonesState,  idField: 'MilestoneId' } :
+      tab === 'QuarterPlan' ? { arr: quarterPlanState, idField: 'QuarterId'   } : null;
     if(!target) return;
     const i = target.arr.findIndex(x => x[target.idField] === key);
     if(i >= 0 && target.arr[i]._pending){
@@ -735,6 +756,32 @@
       CreatedAt:   String(r.CreatedAt || ''),
       UpdatedAt:   String(r.UpdatedAt || ''),
       UpdatedBy:   String(r.UpdatedBy || ''),
+    };
+  }
+  function normalizeTimelineRow(r){
+    if(!r) return { TotalYears: 3 };
+    const n = Number(r.TotalYears);
+    return {
+      Key:        String(r.Key || 'config'),
+      TotalYears: (Number.isFinite(n) && n >= 1) ? Math.floor(n) : 3,
+      UpdatedAt:  String(r.UpdatedAt || ''),
+      UpdatedBy:  String(r.UpdatedBy || ''),
+    };
+  }
+  function normalizeQuarterPlanRow(r){
+    return {
+      QuarterId:      String(r.QuarterId || ''),
+      Quarter:        String(r.Quarter || ''),
+      ProgrammerPlan: String(r.ProgrammerPlan || ''),
+      CharPlan:       String(r.CharPlan || ''),
+      EnvPlan:        String(r.EnvPlan || ''),
+      VfxPlan:        String(r.VfxPlan || ''),
+      Gate:           String(r.Gate || ''),
+      Hidden:         r.Hidden === true || r.Hidden === 'TRUE' || r.Hidden === 'true',
+      SortOrder:      Number(r.SortOrder) || 0,
+      CreatedAt:      String(r.CreatedAt || ''),
+      UpdatedAt:      String(r.UpdatedAt || ''),
+      UpdatedBy:      String(r.UpdatedBy || ''),
     };
   }
 
