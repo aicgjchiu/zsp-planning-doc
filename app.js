@@ -82,7 +82,7 @@
         const col = Number(b.Start) + 1;
         const span = Math.max(1, Number(b.End) - Number(b.Start));
         const lane = (laneByBar[b.BarId] || 0) + 1;
-        html += `<div class="gbar ${escapeHtml(b.Color || 'code')}" data-bar-id="${escapeHtml(b.BarId)}" style="grid-column:${col} / span ${span};grid-row:${lane}" title="${escapeHtml(b.Name)}">`
+        html += `<div class="gbar ${escapeHtml(b.Color || 'code')}${b._pending ? ' pending' : ''}" data-bar-id="${escapeHtml(b.BarId)}" style="grid-column:${col} / span ${span};grid-row:${lane}" title="${escapeHtml(b.Name)}">`
               + `<span class="gbar-name">${escapeHtml(b.Name)}</span>`
               + `<button class="gbar-more" data-bar-id="${escapeHtml(b.BarId)}" ${gateAttr || 'title="Edit bar"'}>⋯</button>`
               + `</div>`;
@@ -104,7 +104,7 @@
           return;
         }
         const title = (m.Goal ? `${m.Name} — ${m.Goal}` : m.Name);
-        html += `<div class="gbar milestone" style="grid-column:${qIdx + 1} / span 1" title="${escapeHtml(title)}">`
+        html += `<div class="gbar milestone${m._pending ? ' pending' : ''}" style="grid-column:${qIdx + 1} / span 1" title="${escapeHtml(title)}">`
               + `<span class="gbar-name">${escapeHtml(m.Name)}</span>`
               + `<button class="gbar-more ms-row-more" data-milestone-id="${escapeHtml(m.MilestoneId)}" ${gateAttr || 'title="Edit milestone"'}>⋯</button>`
               + `</div>`;
@@ -126,7 +126,7 @@
       .sort((a,b) => parseQuarter(a.Quarter) - parseQuarter(b.Quarter));
 
     const cards = active.map(m => `
-      <div class="ms" data-milestone-id="${escapeHtml(m.MilestoneId)}">
+      <div class="ms${m._pending ? ' pending' : ''}" data-milestone-id="${escapeHtml(m.MilestoneId)}">
         <button class="ms-more" data-milestone-id="${escapeHtml(m.MilestoneId)}" ${gateAttr || 'title="Edit milestone"'}>⋯</button>
         <div class="q">${escapeHtml(m.Quarter)}</div>
         <div class="name">${escapeHtml(m.Name)}</div>
@@ -176,7 +176,7 @@
         </tr>
       `).join('');
       return `
-        <div class="card" data-char-id="${escapeAttr(c.Id)}" style="padding:22px">
+        <div class="card${c._pending ? ' pending' : ''}" data-char-id="${escapeAttr(c.Id)}" style="padding:22px">
           <button class="card-menu-btn" data-char-id="${escapeAttr(c.Id)}" ${canEdit?'':'disabled title="Set your name first"'}>⋯</button>
           <div class="row" style="justify-content:space-between;margin-bottom:8px">
             <div>
@@ -220,7 +220,7 @@
       .slice()
       .sort((a,b) => a.SortOrder - b.SortOrder);
     host.innerHTML = rows.map((it, i) => `
-      <tr>
+      <tr class="${it._pending ? 'pending' : ''}">
         <td class="mono dim">${String(i+1).padStart(2,'0')}</td>
         <td><b>${escapeHtml(it.Name)}</b></td>
         <td>${escapeHtml(it.Kind)}</td>
@@ -248,7 +248,7 @@
       .slice()
       .sort((a,b) => a.SortOrder - b.SortOrder);
     host.innerHTML = rows.map((m, i) => `
-      <div class="card" data-map-id="${escapeAttr(m.Id)}">
+      <div class="card${m._pending ? ' pending' : ''}" data-map-id="${escapeAttr(m.Id)}">
         <button class="card-menu-btn" data-map-id="${escapeAttr(m.Id)}" ${canEdit?'':'disabled title="Set your name first"'}>⋯</button>
         <div class="label">Map ${String(i+1).padStart(2,'0')} · ${escapeHtml(m.Difficulty)}</div>
         <h3>${escapeHtml(m.Name)}</h3>
@@ -279,7 +279,7 @@
       .slice()
       .sort((a,b) => a.SortOrder - b.SortOrder);
     host.innerHTML = rows.map(s => `
-      <tr>
+      <tr class="${s._pending ? 'pending' : ''}">
         <td><b>${escapeHtml(s.System)}</b></td>
         <td>${s.SysStatus==='In code' ? '<span class="chip done">In code</span>' : '<span class="chip">'+escapeHtml(s.SysStatus)+'</span>'}</td>
         <td class="dim">${escapeHtml(s.Dep)}</td>
@@ -802,7 +802,7 @@
     const upAt = t.UpdatedAt ? formatTimeAgo(t.UpdatedAt) : '';
     const metaLine = (upBy || upAt) ? `<div class="t-lastupdate">↻ ${escapeHtml(upBy || 'someone')}${upAt ? ' · '+upAt : ''}</div>` : '';
     return `
-      <div class="task phase-${t.Phase} st-${t.Status}" data-task-id="${escapeAttr(t.TaskId)}">
+      <div class="task phase-${t.Phase} st-${t.Status}${t._pending ? ' pending' : ''}" data-task-id="${escapeAttr(t.TaskId)}">
         <div class="t-head">
           <div class="t-title">${escapeHtml(t.Title)}</div>
           <div class="t-meta">Phase ${t.Phase} · Pri ${t.Priority.replace(/^P/,'')}</div>
