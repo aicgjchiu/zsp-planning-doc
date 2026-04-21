@@ -465,7 +465,11 @@ html.zsp-locked body > *:not(#zsp-lock-gate) { display: none !important; }
 .gbar{cursor:grab;user-select:none;gap:6px}
 .gbar:active{cursor:grabbing}
 .gbar.dragging{opacity:0.75;box-shadow:0 2px 8px rgba(0,0,0,0.25)}
-.gbar-name{flex:1;min-width:0;overflow:hidden}
+.gbar-name{
+  flex:1;min-width:0;overflow:hidden;
+  display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;
+  text-overflow:ellipsis;
+}
 .gbar-more{
   flex:0 0 auto;background:transparent;border:none;color:rgba(255,255,255,0.85);
   font-size:14px;line-height:1;padding:2px 4px;border-radius:3px;cursor:pointer;
