@@ -519,6 +519,7 @@
       renderGantt();
       renderMilestones();
       renderQuarterPlan();
+      updateTimelineChip();
       if(!userName){
         const n = (prompt('Enter your name — shown on tasks you create or update. You can change it later.') || '').trim();
         if(n){
@@ -1087,6 +1088,7 @@
     renderGantt();
     renderMilestones();
     renderQuarterPlan();
+    updateTimelineChip();
     renderPhases();
     renderCharacters();
     renderItems();
@@ -1145,6 +1147,14 @@
       tracksBtn.addEventListener('click', () => {
         if(!userName){ alert('Set your name first (click "Change name").'); return; }
         openTracksModal();
+      });
+    }
+    // timeline button (Roadmap tab)
+    const timelineBtn = qs('#timeline-btn');
+    if(timelineBtn){
+      timelineBtn.addEventListener('click', () => {
+        if(!userName){ alert('Set your name first (click "Change name").'); return; }
+        openTimelineModal();
       });
     }
 
@@ -1676,6 +1686,42 @@
     renderMilestones();
     openMilestoneModal(newId);
     p.then(fetchIfIdle);
+  }
+
+  function openTimelineModal(){
+    const currentYears = Math.max(1, Number(timelineState.TotalYears) || 3);
+    const html = `
+      <div class="modal-panel" data-panel style="max-width:420px">
+        <h3>Timeline length</h3>
+        <p class="small" style="color:var(--ink-3);margin-top:-8px">How many years the Gantt + Quarter plan span. Bars or milestones that fall past the new end are hidden (not deleted) until you expand back.</p>
+        <label>Total years <input type="number" id="tl-years" min="1" max="10" value="${currentYears}"></label>
+        <div class="modal-footer">
+          <div class="right">
+            <button class="modal-btn" data-action="cancel">Cancel</button>
+            <button class="modal-btn primary" data-action="save">Save</button>
+          </div>
+        </div>
+      </div>
+    `;
+    openModal(html, (root) => {
+      const panel = qs('[data-panel]', root);
+      qs('[data-action="cancel"]', panel).addEventListener('click', closeModal);
+      qs('[data-action="save"]', panel).addEventListener('click', () => {
+        const n = Math.max(1, Math.floor(Number(qs('#tl-years', panel).value) || 3));
+        closeModal();
+        const p = pushRow('Timeline', 'config', { Key: 'config', TotalYears: n });
+        renderGantt();
+        renderMilestones();
+        renderQuarterPlan();
+        updateTimelineChip();
+        p.then(fetchIfIdle);
+      });
+    });
+  }
+
+  function updateTimelineChip(){
+    const el = qs('#timeline-years');
+    if(el) el.textContent = String(Math.max(1, Number(timelineState.TotalYears) || 3));
   }
 
   function openTracksModal(){
