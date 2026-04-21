@@ -27,9 +27,19 @@
   });
 
   // --- Render: Gantt ---
+  // Quarter strings: "Y1 Q2" -> 1 (0-based quarter index across the 12-quarter span).
+  function parseQuarter(s){
+    const m = /^Y(\d)\s*Q(\d)$/.exec(String(s || '').trim());
+    if(!m) return -1;
+    const idx = (Number(m[1]) - 1) * 4 + (Number(m[2]) - 1);
+    return (idx >= 0 && idx < 12) ? idx : -1;
+  }
+
   function renderGantt(){
     const host = qs('#gantt');
     if(!host) return;
+    const canEdit = !!userName;
+    const gateAttr = canEdit ? '' : 'disabled title="Set your name first"';
     let html = '';
     // header — single grid, 240px label + 12 × 120px quarters
     html += '<div class="gantt-header">';
@@ -41,19 +51,66 @@
       }
     }
     html += '</div>';
-    // rows
-    window.GANTT.forEach(row=>{
-      html += `<div class="gantt-row">`;
-      html += `<div class="who"><span class="dot ${row.role}"></span>${row.who}</div>`;
-      html += `<div class="track">`;
-      row.bars.forEach(b=>{
-        const col = b.start+1;
-        const span = Math.max(1, b.end - b.start);
-        const title = (b.title || b.name || '').replace(/"/g,'&quot;');
-        html += `<div class="gbar ${b.color}" style="grid-column:${col} / span ${span}" title="${title}">${b.name}</div>`;
+
+    // User tracks — rendered from ganttTracksState/ganttBarsState
+    const tracks = ganttTracksState
+      .filter(t => !t.Hidden)
+      .slice()
+      .sort((a,b) => (a.Order||0) - (b.Order||0));
+
+    tracks.forEach(track => {
+      const bars = ganttBarsState
+        .filter(b => b.TrackId === track.TrackId && !b.Hidden)
+        .slice()
+        .sort((a,b) => Number(a.Start) - Number(b.Start));
+      // Interval-pack: each bar gets a lane (grid-row) so overlaps stack vertically.
+      const laneEnds = []; // laneEnds[i] = end quarter of last bar on lane i
+      const laneByBar = {};
+      bars.forEach(b => {
+        const s = Number(b.Start), en = Number(b.End);
+        let lane = laneEnds.findIndex(end => end <= s);
+        if(lane < 0){ lane = laneEnds.length; laneEnds.push(en); }
+        else { laneEnds[lane] = en; }
+        laneByBar[b.BarId] = lane;
       });
+      const laneCount = Math.max(1, laneEnds.length);
+
+      html += `<div class="gantt-row" data-track-id="${escapeHtml(track.TrackId)}" style="--lane-count:${laneCount}">`;
+      html += `<div class="who"><span class="dot ${escapeHtml(track.Role)}"></span>${escapeHtml(track.Name)}</div>`;
+      html += `<div class="track">`;
+      bars.forEach(b => {
+        const col = Number(b.Start) + 1;
+        const span = Math.max(1, Number(b.End) - Number(b.Start));
+        const lane = (laneByBar[b.BarId] || 0) + 1;
+        html += `<div class="gbar ${escapeHtml(b.Color || 'code')}" data-bar-id="${escapeHtml(b.BarId)}" style="grid-column:${col} / span ${span};grid-row:${lane}" title="${escapeHtml(b.Name)}">`
+              + `<span class="gbar-name">${escapeHtml(b.Name)}</span>`
+              + `<button class="gbar-more" data-bar-id="${escapeHtml(b.BarId)}" ${gateAttr || 'title="Edit bar"'}>⋯</button>`
+              + `</div>`;
+      });
+      html += `<button class="gbar-add" data-track-id="${escapeHtml(track.TrackId)}" ${gateAttr || 'title="Add bar to this track"'}>＋</button>`;
       html += `</div></div>`;
     });
+
+    // Auto-derived read-only milestone row (no drag, no ⋯ button)
+    html += `<div class="gantt-row gantt-milestone-row">`;
+    html += `<div class="who"><span class="dot" style="background:var(--c-milestone)"></span>Milestones</div>`;
+    html += `<div class="track">`;
+    milestonesState
+      .filter(m => !m.Hidden)
+      .forEach(m => {
+        const qIdx = parseQuarter(m.Quarter);
+        if(qIdx < 0){
+          console.warn(`[gantt] invalid milestone quarter: ${m.Quarter}`);
+          return;
+        }
+        const title = (m.Goal ? `${m.Name} — ${m.Goal}` : m.Name);
+        html += `<div class="gbar milestone" style="grid-column:${qIdx + 1} / span 1" title="${escapeHtml(title)}">`
+              + `<span class="gbar-name">${escapeHtml(m.Name)}</span>`
+              + `<button class="gbar-more ms-row-more" data-milestone-id="${escapeHtml(m.MilestoneId)}" ${gateAttr || 'title="Edit milestone"'}>⋯</button>`
+              + `</div>`;
+      });
+    html += `</div></div>`;
+
     host.innerHTML = html;
   }
 
@@ -61,13 +118,23 @@
   function renderMilestones(){
     const host = qs('#milestones');
     if(!host) return;
-    host.innerHTML = window.MILESTONES.map(m=>`
-      <div class="ms">
-        <div class="q">${m.q}</div>
-        <div class="name">${m.name}</div>
-        <div class="goal">${m.goal}</div>
+    const canEdit = !!userName;
+    const gateAttr = canEdit ? '' : 'disabled title="Set your name first"';
+    const active = milestonesState
+      .filter(m => !m.Hidden)
+      .slice()
+      .sort((a,b) => parseQuarter(a.Quarter) - parseQuarter(b.Quarter));
+
+    const cards = active.map(m => `
+      <div class="ms" data-milestone-id="${escapeHtml(m.MilestoneId)}">
+        <button class="ms-more" data-milestone-id="${escapeHtml(m.MilestoneId)}" ${gateAttr || 'title="Edit milestone"'}>⋯</button>
+        <div class="q">${escapeHtml(m.Quarter)}</div>
+        <div class="name">${escapeHtml(m.Name)}</div>
+        <div class="goal">${escapeHtml(m.Goal || '')}</div>
       </div>
     `).join('');
+
+    host.innerHTML = cards + `<button class="ms-add" id="milestone-add-btn" ${gateAttr || 'title="Add milestone"'}>＋</button>`;
   }
 
   // --- Render: Phases table ---
@@ -283,6 +350,9 @@
   let itemsState      = [];        // array of Item objects
   let mapsState       = [];        // array of Map objects
   let systemsState    = [];        // array of System object
+  let ganttTracksState = [];       // array of GanttTrack objects
+  let ganttBarsState   = [];       // array of GanttBar objects
+  let milestonesState  = [];       // array of Milestone objects
   let userName        = '';        // cached identity
   let syncStatus      = 'idle';
   let lastSyncAt      = null;
@@ -313,6 +383,9 @@
       itemsState      = (json.items      || []).map(normalizeItemRow);
       mapsState       = (json.maps       || []).map(normalizeMapRow);
       systemsState    = (json.systems    || []).map(normalizeSystemRow);
+      ganttTracksState = (json.ganttTracks || []).map(normalizeGanttTrackRow);
+      ganttBarsState   = (json.ganttBars   || []).map(normalizeGanttBarRow);
+      milestonesState  = (json.milestones  || []).map(normalizeMilestoneRow);
       lastSyncAt = new Date();
       setSyncStatus('ok');
       const anyEmpty =
@@ -327,6 +400,8 @@
       renderItems();
       renderMaps();
       renderSystems();
+      renderGantt();
+      renderMilestones();
       if(!userName){
         const n = (prompt('Enter your name — shown on tasks you create or update. You can change it later.') || '').trim();
         if(n){
@@ -334,11 +409,72 @@
           try{ localStorage.setItem(USER_KEY, n); }catch(e){}
           updateSyncPill();
           renderBoard();
+          renderGantt();
+          renderMilestones();
         }
       }
+      await bootstrapIfEmpty();
     }catch(err){
       console.warn('[sync] fetch error:', err);
       setSyncStatus('error');
+    }
+  }
+
+  async function bootstrapIfEmpty(){
+    // Idempotent: only seeds the three new Roadmap tabs when they're all empty.
+    if(ganttTracksState.length || ganttBarsState.length || milestonesState.length) return;
+    if(!window.GANTT || !window.MILESTONES) return;
+
+    const tracks = [];
+    const bars = [];
+    window.GANTT.forEach((lane, laneIdx) => {
+      // Skip the legacy "Milestones" lane — that data lives in the Milestones tab now.
+      if((lane.role || '').toLowerCase() === 'milestone') return;
+      const trackId = genId('track');
+      tracks.push({
+        TrackId: trackId,
+        Name: lane.who || lane.name || 'Track',
+        Role: lane.role || 'code',
+        Order: laneIdx,
+        Hidden: false,
+        SortOrder: laneIdx,
+      });
+      (lane.bars || []).forEach((b, bi) => {
+        bars.push({
+          BarId: genId('bar'),
+          TrackId: trackId,
+          Name: b.name,
+          Start: b.start,
+          End: b.end,
+          Color: b.color || lane.role || 'code',
+          Hidden: false,
+          SortOrder: bi,
+        });
+      });
+    });
+
+    const milestones = window.MILESTONES.map((m, i) => ({
+      MilestoneId: genId('ms'),
+      Quarter: m.q || m.quarter || '',
+      Name: m.name || '',
+      Goal: m.goal || '',
+      Hidden: false,
+      SortOrder: i,
+    }));
+
+    try{
+      await fetch(SHEET_ENDPOINT, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify({
+          Action: 'bootstrap',
+          UpdatedBy: userName || 'bootstrap',
+          Tabs: { GanttTracks: tracks, GanttBars: bars, Milestones: milestones },
+        }),
+      });
+      await fetchAll();
+    }catch(err){
+      console.warn('[bootstrap] failed:', err);
     }
   }
 
@@ -507,6 +643,47 @@
       CreatedAt:  String(r.CreatedAt || ''),
       UpdatedAt:  String(r.UpdatedAt || ''),
       UpdatedBy:  String(r.UpdatedBy || ''),
+    };
+  }
+  function normalizeGanttTrackRow(r){
+    return {
+      TrackId:   String(r.TrackId || ''),
+      Name:      String(r.Name || ''),
+      Role:      String(r.Role || 'code'),
+      Order:     Number(r.Order) || 0,
+      Hidden:    r.Hidden === true || r.Hidden === 'TRUE' || r.Hidden === 'true',
+      SortOrder: Number(r.SortOrder) || 0,
+      CreatedAt: String(r.CreatedAt || ''),
+      UpdatedAt: String(r.UpdatedAt || ''),
+      UpdatedBy: String(r.UpdatedBy || ''),
+    };
+  }
+  function normalizeGanttBarRow(r){
+    return {
+      BarId:     String(r.BarId || ''),
+      TrackId:   String(r.TrackId || ''),
+      Name:      String(r.Name || ''),
+      Start:     Number(r.Start) || 0,
+      End:       Number(r.End) || 1,
+      Color:     String(r.Color || 'code'),
+      Hidden:    r.Hidden === true || r.Hidden === 'TRUE' || r.Hidden === 'true',
+      SortOrder: Number(r.SortOrder) || 0,
+      CreatedAt: String(r.CreatedAt || ''),
+      UpdatedAt: String(r.UpdatedAt || ''),
+      UpdatedBy: String(r.UpdatedBy || ''),
+    };
+  }
+  function normalizeMilestoneRow(r){
+    return {
+      MilestoneId: String(r.MilestoneId || ''),
+      Quarter:     String(r.Quarter || ''),
+      Name:        String(r.Name || ''),
+      Goal:        String(r.Goal || ''),
+      Hidden:      r.Hidden === true || r.Hidden === 'TRUE' || r.Hidden === 'true',
+      SortOrder:   Number(r.SortOrder) || 0,
+      CreatedAt:   String(r.CreatedAt || ''),
+      UpdatedAt:   String(r.UpdatedAt || ''),
+      UpdatedBy:   String(r.UpdatedBy || ''),
     };
   }
 
@@ -725,6 +902,8 @@
           try{ localStorage.setItem(USER_KEY, n); }catch(e){}
           updateSyncPill();
           renderBoard();
+          renderGantt();
+          renderMilestones();
         }
       });
     }
@@ -734,6 +913,76 @@
       teamBtn.addEventListener('click', () => {
         if(!userName){ alert('Set your name first (click "Change name").'); return; }
         openTeamModal();
+      });
+    }
+    // tracks button (Roadmap tab)
+    const tracksBtn = qs('#tracks-btn');
+    if(tracksBtn){
+      tracksBtn.addEventListener('click', () => {
+        if(!userName){ alert('Set your name first (click "Change name").'); return; }
+        openTracksModal();
+      });
+    }
+
+    // Gantt bar drag — pointerdown delegation on #gantt (user tracks only)
+    const ganttForDrag = qs('#gantt');
+    if(ganttForDrag){
+      ganttForDrag.addEventListener('pointerdown', onGanttPointerDown);
+    }
+
+    // Gantt bar actions — event delegation on #gantt
+    const gantt = qs('#gantt');
+    if(gantt){
+      gantt.addEventListener('click', async (e) => {
+        const moreBtn = e.target.closest('.gbar-more');
+        if(moreBtn){
+          e.stopPropagation();
+          if(!userName){ alert('Set your name first (click "Change name").'); return; }
+          const msId = moreBtn.getAttribute('data-milestone-id');
+          if(msId){ openMilestoneModal(msId); return; }
+          openBarModal(moreBtn.getAttribute('data-bar-id'));
+          return;
+        }
+        const addBtn = e.target.closest('.gbar-add');
+        if(addBtn){
+          if(!userName){ alert('Set your name first (click "Change name").'); return; }
+          const trackId = addBtn.getAttribute('data-track-id');
+          const track = ganttTracksState.find(t => t.TrackId === trackId);
+          if(!track) return;
+          const newId = genId('bar');
+          const fields = {
+            BarId: newId,
+            TrackId: trackId,
+            Name: 'New bar',
+            Start: 0,
+            End: 1,
+            Color: track.Role || 'code',
+            Hidden: false,
+            SortOrder: 0,
+          };
+          // Optimistic: mutate state, render, open modal immediately. Server sync in background.
+          ganttBarsState.push(normalizeGanttBarRow(fields));
+          renderGantt();
+          openBarModal(newId);
+          pushRow('GanttBars', newId, fields).then(() => fetchAll());
+        }
+      });
+    }
+
+    // Milestone strip actions — event delegation
+    const msStrip = qs('#milestones');
+    if(msStrip){
+      msStrip.addEventListener('click', async (e) => {
+        const moreBtn = e.target.closest('.ms-more');
+        if(moreBtn){
+          if(!userName){ alert('Set your name first (click "Change name").'); return; }
+          openMilestoneModal(moreBtn.getAttribute('data-milestone-id'));
+          return;
+        }
+        if(e.target.closest('#milestone-add-btn')){
+          if(!userName){ alert('Set your name first (click "Change name").'); return; }
+          await addMilestone();
+        }
       });
     }
 
@@ -955,6 +1204,372 @@
           if(changed){
             await pushRow('Team', m.MemberId, {
               Name: m.Name, RoleKey: m.RoleKey, RoleLabel: m.RoleLabel, Order: m.Order, Active: m.Active,
+            });
+          }
+        }
+        fetchAll();
+      });
+    }
+
+    const root = qs('#modal-root');
+    rerender(root);
+    root.classList.add('open');
+    document.addEventListener('keydown', modalKeyHandler);
+  }
+
+  // --- Gantt bar drag (user tracks only, identity-gated) ---
+  const GANTT_COLUMN_PX = 120;
+  let dragState = null;
+
+  function onGanttPointerDown(e){
+    if(!userName) return;
+    // Ignore clicks on the ⋯ and ＋ buttons — let them bubble to the click handler.
+    if(e.target.closest('.gbar-more') || e.target.closest('.gbar-add')) return;
+    const el = e.target.closest('.gbar');
+    if(!el) return;
+    // Milestone row is read-only.
+    if(el.closest('.gantt-milestone-row')) return;
+    const barId = el.getAttribute('data-bar-id');
+    const bar = ganttBarsState.find(b => b.BarId === barId);
+    if(!bar) return;
+
+    const rect = el.getBoundingClientRect();
+    const offsetX = e.clientX - rect.left;
+    let zone;
+    if(offsetX < 8) zone = 'start';
+    else if(offsetX > rect.width - 8) zone = 'end';
+    else zone = 'move';
+
+    dragState = {
+      barId, zone, el,
+      origStart: Number(bar.Start),
+      origEnd: Number(bar.End),
+      startX: e.clientX,
+      newStart: Number(bar.Start),
+      newEnd: Number(bar.End),
+      moved: false,
+    };
+    try{ el.setPointerCapture(e.pointerId); }catch(err){}
+    el.classList.add('dragging');
+    document.body.style.cursor = (zone === 'move') ? 'grabbing' : 'ew-resize';
+    el.addEventListener('pointermove', onBarPointerMove);
+    el.addEventListener('pointerup', onBarPointerUp);
+    el.addEventListener('pointercancel', onBarPointerCancel);
+    e.preventDefault();
+  }
+
+  function onBarPointerMove(e){
+    if(!dragState) return;
+    const delta = Math.round((e.clientX - dragState.startX) / GANTT_COLUMN_PX);
+    let s = dragState.origStart, en = dragState.origEnd;
+    if(dragState.zone === 'move'){ s += delta; en += delta; }
+    else if(dragState.zone === 'start'){ s += delta; }
+    else if(dragState.zone === 'end'){ en += delta; }
+    // Clamps
+    if(s < 0){
+      if(dragState.zone === 'move') en += (0 - s);
+      s = 0;
+    }
+    if(en > 12){
+      if(dragState.zone === 'move') s -= (en - 12);
+      en = 12;
+    }
+    if(en - s < 1){
+      if(dragState.zone === 'start') s = en - 1;
+      else if(dragState.zone === 'end') en = s + 1;
+      else { en = s + 1; }
+    }
+    dragState.el.style.gridColumn = `${s + 1} / span ${en - s}`;
+    dragState.newStart = s;
+    dragState.newEnd = en;
+    if(s !== dragState.origStart || en !== dragState.origEnd) dragState.moved = true;
+  }
+
+  async function onBarPointerUp(e){
+    if(!dragState) return;
+    const { barId, el, origStart, origEnd, newStart, newEnd, moved } = dragState;
+    cleanupDrag(e);
+    if(!moved || (newStart === origStart && newEnd === origEnd)) return;
+    try{
+      await pushRow('GanttBars', barId, { Start: newStart, End: newEnd });
+      await fetchAll();
+    }catch(err){
+      console.warn('[drag] commit failed:', err);
+      el.style.gridColumn = `${origStart + 1} / span ${origEnd - origStart}`;
+    }
+  }
+
+  function onBarPointerCancel(e){
+    if(!dragState) return;
+    const { el, origStart, origEnd } = dragState;
+    el.style.gridColumn = `${origStart + 1} / span ${origEnd - origStart}`;
+    cleanupDrag(e);
+  }
+
+  function cleanupDrag(e){
+    if(!dragState) return;
+    const { el } = dragState;
+    el.classList.remove('dragging');
+    document.body.style.cursor = '';
+    el.removeEventListener('pointermove', onBarPointerMove);
+    el.removeEventListener('pointerup', onBarPointerUp);
+    el.removeEventListener('pointercancel', onBarPointerCancel);
+    try{ el.releasePointerCapture(e.pointerId); }catch(err){}
+    dragState = null;
+  }
+
+  function openBarModal(barId){
+    const bar = ganttBarsState.find(b => b.BarId === barId);
+    if(!bar){ alert('Bar not found.'); return; }
+    const COLOR_OPTS = ['portal','code','char','env','vfx'];
+
+    const startOpts = [];
+    for(let i = 0; i <= 11; i++){
+      const y = Math.floor(i/4) + 1, q = (i % 4) + 1;
+      startOpts.push(`<option value="${i}" ${Number(bar.Start)===i?'selected':''}>Y${y} Q${q}</option>`);
+    }
+    const endOpts = [];
+    for(let i = 1; i <= 12; i++){
+      const y = Math.floor((i-1)/4) + 1, q = ((i-1) % 4) + 1;
+      const label = (i === 12) ? 'end of Y3 Q4' : `Y${y} Q${q} (end)`;
+      endOpts.push(`<option value="${i}" ${Number(bar.End)===i?'selected':''}>${label}</option>`);
+    }
+    const colorOpts = COLOR_OPTS.map(c => `<option value="${c}" ${bar.Color===c?'selected':''}>${c}</option>`).join('');
+
+    const html = `
+      <div class="modal-panel" data-panel style="max-width:520px">
+        <h3>Edit bar</h3>
+        <label>Name <input type="text" id="bar-name" value="${escapeAttr(bar.Name)}"></label>
+        <label>Color <select id="bar-color">${colorOpts}</select></label>
+        <label>Start <select id="bar-start">${startOpts.join('')}</select></label>
+        <label>End <select id="bar-end">${endOpts.join('')}</select></label>
+        <div class="modal-footer">
+          <button class="modal-btn danger" data-action="delete">Delete</button>
+          <div class="right">
+            <button class="modal-btn" data-action="cancel">Cancel</button>
+            <button class="modal-btn primary" data-action="save">Save</button>
+          </div>
+        </div>
+      </div>
+    `;
+    openModal(html, (root) => {
+      const panel = qs('[data-panel]', root);
+      qs('[data-action="cancel"]', panel).addEventListener('click', closeModal);
+      qs('[data-action="delete"]', panel).addEventListener('click', () => {
+        if(!confirm('Delete this bar?')) return;
+        closeModal();
+        // Optimistic
+        const i = ganttBarsState.findIndex(b => b.BarId === bar.BarId);
+        if(i >= 0) ganttBarsState[i] = Object.assign({}, ganttBarsState[i], { Hidden: true });
+        renderGantt();
+        pushRow('GanttBars', bar.BarId, { Hidden: true }).then(() => fetchAll());
+      });
+      qs('[data-action="save"]', panel).addEventListener('click', () => {
+        const name = qs('#bar-name', panel).value.trim();
+        const color = qs('#bar-color', panel).value;
+        const start = Number(qs('#bar-start', panel).value);
+        const end = Number(qs('#bar-end', panel).value);
+        if(end <= start){ alert('End must be after Start.'); return; }
+        closeModal();
+        // Optimistic
+        const patch = { Name: name, Color: color, Start: start, End: end };
+        const i = ganttBarsState.findIndex(b => b.BarId === bar.BarId);
+        if(i >= 0) ganttBarsState[i] = Object.assign({}, ganttBarsState[i], patch);
+        renderGantt();
+        pushRow('GanttBars', bar.BarId, patch).then(() => fetchAll());
+      });
+    });
+  }
+
+  function openMilestoneModal(milestoneId){
+    const m = milestonesState.find(x => x.MilestoneId === milestoneId);
+    if(!m){ alert('Milestone not found.'); return; }
+
+    const quarterOpts = [];
+    for(let y = 1; y <= 3; y++) for(let q = 1; q <= 4; q++){
+      const s = `Y${y} Q${q}`;
+      quarterOpts.push(`<option value="${s}" ${m.Quarter===s?'selected':''}>${s}</option>`);
+    }
+
+    const html = `
+      <div class="modal-panel" data-panel style="max-width:520px">
+        <h3>Edit milestone</h3>
+        <label>Quarter <select id="ms-quarter">${quarterOpts.join('')}</select></label>
+        <label>Name <input type="text" id="ms-name" value="${escapeAttr(m.Name)}"></label>
+        <label>Goal <textarea id="ms-goal" rows="4">${escapeHtml(m.Goal || '')}</textarea></label>
+        <div class="modal-footer">
+          <button class="modal-btn danger" data-action="delete">Delete</button>
+          <div class="right">
+            <button class="modal-btn" data-action="cancel">Cancel</button>
+            <button class="modal-btn primary" data-action="save">Save</button>
+          </div>
+        </div>
+      </div>
+    `;
+    openModal(html, (root) => {
+      const panel = qs('[data-panel]', root);
+      qs('[data-action="cancel"]', panel).addEventListener('click', closeModal);
+      qs('[data-action="delete"]', panel).addEventListener('click', () => {
+        if(!confirm('Delete this milestone?')) return;
+        closeModal();
+        const i = milestonesState.findIndex(x => x.MilestoneId === m.MilestoneId);
+        if(i >= 0) milestonesState[i] = Object.assign({}, milestonesState[i], { Hidden: true });
+        renderGantt();
+        renderMilestones();
+        pushRow('Milestones', m.MilestoneId, { Hidden: true }).then(() => fetchAll());
+      });
+      qs('[data-action="save"]', panel).addEventListener('click', () => {
+        const quarter = qs('#ms-quarter', panel).value;
+        const name = qs('#ms-name', panel).value.trim();
+        const goal = qs('#ms-goal', panel).value;
+        closeModal();
+        const patch = { Quarter: quarter, Name: name, Goal: goal };
+        const i = milestonesState.findIndex(x => x.MilestoneId === m.MilestoneId);
+        if(i >= 0) milestonesState[i] = Object.assign({}, milestonesState[i], patch);
+        renderGantt();
+        renderMilestones();
+        pushRow('Milestones', m.MilestoneId, patch).then(() => fetchAll());
+      });
+    });
+  }
+
+  function addMilestone(){
+    const taken = new Set(
+      milestonesState.filter(m => !m.Hidden).map(m => m.Quarter)
+    );
+    let quarter = 'Y1 Q1';
+    outer: for(let y = 1; y <= 3; y++) for(let q = 1; q <= 4; q++){
+      const s = `Y${y} Q${q}`;
+      if(!taken.has(s)){ quarter = s; break outer; }
+    }
+    const newId = genId('ms');
+    const fields = {
+      MilestoneId: newId,
+      Quarter: quarter,
+      Name: 'New milestone',
+      Goal: '',
+      Hidden: false,
+      SortOrder: 0,
+    };
+    // Optimistic
+    milestonesState.push(normalizeMilestoneRow(fields));
+    renderGantt();
+    renderMilestones();
+    openMilestoneModal(newId);
+    pushRow('Milestones', newId, fields).then(() => fetchAll());
+  }
+
+  function openTracksModal(){
+    const draft = ganttTracksState.filter(t => !t.Hidden).map(t => Object.assign({}, t));
+    const ROLE_OPTS = ['portal','code','char','env','vfx'];
+
+    function panelHtml(){
+      const sorted = draft.slice().sort((a,b) => (a.Order||0) - (b.Order||0));
+      const roleOpts = (sel) => ROLE_OPTS.map(r => `<option value="${r}" ${sel===r?'selected':''}>${r}</option>`).join('');
+      const rows = sorted.map((t, i) => `
+        <tr data-track-id="${escapeAttr(t.TrackId)}">
+          <td><input type="text" data-f="Name" value="${escapeAttr(t.Name)}"></td>
+          <td><select data-f="Role">${roleOpts(t.Role)}</select></td>
+          <td class="mono-cell">${t.Order}</td>
+          <td>
+            <button class="modal-btn" data-action="up" ${i===0?'disabled':''}>↑</button>
+            <button class="modal-btn" data-action="down" ${i===sorted.length-1?'disabled':''}>↓</button>
+          </td>
+          <td><button class="modal-btn danger" data-action="delete">Delete</button></td>
+        </tr>
+      `).join('');
+      return `
+        <div class="modal-panel" data-panel style="max-width:720px">
+          <h3>Manage Roadmap Tracks</h3>
+          <p class="small" style="color:var(--ink-3);margin-top:-8px">Delete soft-hides the track; its bars stay in the sheet.</p>
+          <table class="sheet">
+            <thead><tr><th>Name</th><th>Role</th><th>Order</th><th style="width:90px">Reorder</th><th style="width:90px">Delete</th></tr></thead>
+            <tbody>${rows}</tbody>
+          </table>
+          <div><button class="modal-btn" data-action="add-track">+ Add track</button></div>
+          <div class="modal-footer">
+            <div class="right">
+              <button class="modal-btn" data-action="cancel">Cancel</button>
+              <button class="modal-btn primary" data-action="save">Save</button>
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    function rerender(root){
+      root.innerHTML = `<div class="modal-overlay" data-overlay>${panelHtml()}</div>`;
+      wire(root);
+    }
+
+    function wire(root){
+      const overlay = qs('[data-overlay]', root);
+      overlay.addEventListener('click', (e) => { if(e.target === overlay) closeModal(); });
+      const panel = qs('[data-panel]', root);
+      qsa('tr[data-track-id]', panel).forEach(tr => {
+        const id = tr.getAttribute('data-track-id');
+        const t = draft.find(x => x.TrackId === id);
+        qsa('[data-f]', tr).forEach(el => {
+          el.addEventListener('change', () => {
+            const k = el.getAttribute('data-f');
+            t[k] = el.value;
+          });
+        });
+        qs('[data-action="up"]', tr).addEventListener('click', () => {
+          const sorted = draft.filter(x => !x._delete).slice().sort((a,b) => (a.Order||0) - (b.Order||0));
+          const idx = sorted.findIndex(x => x.TrackId === id);
+          if(idx > 0){
+            const a = sorted[idx-1], b = sorted[idx];
+            const tmp = a.Order; a.Order = b.Order; b.Order = tmp;
+            rerender(root);
+          }
+        });
+        qs('[data-action="down"]', tr).addEventListener('click', () => {
+          const sorted = draft.filter(x => !x._delete).slice().sort((a,b) => (a.Order||0) - (b.Order||0));
+          const idx = sorted.findIndex(x => x.TrackId === id);
+          if(idx >= 0 && idx < sorted.length - 1){
+            const a = sorted[idx], b = sorted[idx+1];
+            const tmp = a.Order; a.Order = b.Order; b.Order = tmp;
+            rerender(root);
+          }
+        });
+        qs('[data-action="delete"]', tr).addEventListener('click', () => {
+          if(!confirm(`Delete track "${t.Name}"? Its bars will be hidden too.`)) return;
+          t._delete = true;
+          rerender(root);
+        });
+      });
+      qs('[data-action="add-track"]', panel).addEventListener('click', () => {
+        const maxOrder = draft.reduce((m,x) => Math.max(m, x.Order||0), -1);
+        draft.push({
+          TrackId: genId('track'),
+          Name: 'New track',
+          Role: 'code',
+          Order: maxOrder + 1,
+          Hidden: false,
+          SortOrder: maxOrder + 1,
+          _isNew: true,
+        });
+        rerender(root);
+      });
+      qs('[data-action="cancel"]', panel).addEventListener('click', closeModal);
+      qs('[data-action="save"]', panel).addEventListener('click', async () => {
+        closeModal();
+        for(const t of draft){
+          if(t._delete){
+            if(!t._isNew){
+              await pushRow('GanttTracks', t.TrackId, { Hidden: true });
+            }
+            continue;
+          }
+          const orig = ganttTracksState.find(x => x.TrackId === t.TrackId);
+          const changed = !orig
+            || orig.Name !== t.Name
+            || orig.Role !== t.Role
+            || orig.Order !== t.Order;
+          if(changed){
+            await pushRow('GanttTracks', t.TrackId, {
+              TrackId: t.TrackId, Name: t.Name, Role: t.Role, Order: t.Order,
             });
           }
         }

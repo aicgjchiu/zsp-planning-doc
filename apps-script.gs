@@ -5,24 +5,30 @@
 // To change behavior: edit in Apps Script editor (Extensions → Apps Script on the sheet),
 // then Deploy → Manage deployments → New version → Deploy. Update this file to match.
 
-const TASKS_SHEET      = 'Tasks';
-const TEAM_SHEET       = 'Team';
-const CHARACTERS_SHEET = 'Characters';
-const ITEMS_SHEET      = 'Items';
-const MAPS_SHEET       = 'Maps';
-const SYSTEMS_SHEET    = 'Systems';
-const CONFIG_SHEET     = 'Config'; // private — NEVER returned in GET
+const TASKS_SHEET        = 'Tasks';
+const TEAM_SHEET         = 'Team';
+const CHARACTERS_SHEET   = 'Characters';
+const ITEMS_SHEET        = 'Items';
+const MAPS_SHEET         = 'Maps';
+const SYSTEMS_SHEET      = 'Systems';
+const GANTT_TRACKS_SHEET = 'GanttTracks';
+const GANTT_BARS_SHEET   = 'GanttBars';
+const MILESTONES_SHEET   = 'Milestones';
+const CONFIG_SHEET       = 'Config'; // private — NEVER returned in GET
 
 function doGet(e) {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   return jsonOut({
     ok: true,
-    tasks:      readTab(ss.getSheetByName(TASKS_SHEET)),
-    team:       readTab(ss.getSheetByName(TEAM_SHEET)),
-    characters: readTab(ss.getSheetByName(CHARACTERS_SHEET)),
-    items:      readTab(ss.getSheetByName(ITEMS_SHEET)),
-    maps:       readTab(ss.getSheetByName(MAPS_SHEET)),
-    systems:    readTab(ss.getSheetByName(SYSTEMS_SHEET)),
+    tasks:        readTab(ss.getSheetByName(TASKS_SHEET)),
+    team:         readTab(ss.getSheetByName(TEAM_SHEET)),
+    characters:   readTab(ss.getSheetByName(CHARACTERS_SHEET)),
+    items:        readTab(ss.getSheetByName(ITEMS_SHEET)),
+    maps:         readTab(ss.getSheetByName(MAPS_SHEET)),
+    systems:      readTab(ss.getSheetByName(SYSTEMS_SHEET)),
+    ganttTracks:  readTab(ss.getSheetByName(GANTT_TRACKS_SHEET)),
+    ganttBars:    readTab(ss.getSheetByName(GANTT_BARS_SHEET)),
+    milestones:   readTab(ss.getSheetByName(MILESTONES_SHEET)),
   });
 }
 
@@ -107,22 +113,28 @@ function handleBootstrap(body) {
   }
   try {
     const ss = SpreadsheetApp.getActiveSpreadsheet();
-    const seedMap = {
-      Tasks:      body.Tasks,
-      Team:       body.Team,
-      Characters: body.Characters,
-      Items:      body.Items,
-      Maps:       body.Maps,
-      Systems:    body.Systems,
-    };
+
+    // Generic shape: { Action: "bootstrap", Tabs: { <TabName>: [rows], ... } }
+    // Legacy shape (one release of compat): top-level Tasks/Team/Characters/...
+    let tabs = body.Tabs;
+    if (!tabs) {
+      tabs = {};
+      ['Tasks', 'Team', 'Characters', 'Items', 'Maps', 'Systems'].forEach(name => {
+        if (body[name]) tabs[name] = body[name];
+      });
+    }
+
+    const now = new Date().toISOString();
+    const updatedBy = body.UpdatedBy || 'bootstrap';
     const seeded = {};
-    Object.keys(seedMap).forEach(name => {
-      const rows = seedMap[name];
+
+    Object.keys(tabs).forEach(name => {
+      const rows = tabs[name];
       if (!rows || !rows.length) return;
       const sheet = ss.getSheetByName(name);
       if (!sheet) return;
       if (sheet.getLastRow() > 1) { seeded[name] = false; return; }
-      writeRows(sheet, rows);
+      writeRows(sheet, rows, now, updatedBy);
       seeded[name] = true;
     });
     return jsonOut({ ok: true, seeded });
@@ -131,10 +143,14 @@ function handleBootstrap(body) {
   }
 }
 
-function writeRows(sheet, rows) {
+function writeRows(sheet, rows, now, updatedBy) {
   if (!rows.length) return;
   const headers = sheet.getDataRange().getValues()[0];
-  const matrix = rows.map(r => headers.map(h => (r[h] != null ? r[h] : '')));
+  const matrix = rows.map(r => headers.map(h => {
+    if (h === 'CreatedAt' || h === 'UpdatedAt') return r[h] != null ? r[h] : (now || new Date().toISOString());
+    if (h === 'UpdatedBy')                     return r[h] != null ? r[h] : (updatedBy || 'bootstrap');
+    return r[h] != null ? r[h] : '';
+  }));
   sheet.getRange(sheet.getLastRow() + 1, 1, matrix.length, headers.length).setValues(matrix);
 }
 
