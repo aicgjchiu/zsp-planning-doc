@@ -27,12 +27,12 @@
   });
 
   // --- Render: Gantt ---
-  // Quarter strings: "Y1 Q2" -> 1 (0-based quarter index across the 12-quarter span).
+  // Quarter strings: "Y1 Q2" -> 1 (0-based quarter index). Caller filters by totalQuarters.
   function parseQuarter(s){
     const m = /^Y(\d)\s*Q(\d)$/.exec(String(s || '').trim());
     if(!m) return -1;
     const idx = (Number(m[1]) - 1) * 4 + (Number(m[2]) - 1);
-    return (idx >= 0 && idx < 12) ? idx : -1;
+    return idx >= 0 ? idx : -1;
   }
 
   function renderGantt(){
@@ -40,11 +40,15 @@
     if(!host) return;
     const canEdit = !!userName;
     const gateAttr = canEdit ? '' : 'disabled title="Set your name first"';
+    const totalYears    = Math.max(1, Number(timelineState.TotalYears) || 3);
+    const totalQuarters = totalYears * 4;
+    host.style.setProperty('--total-quarters', totalQuarters);
+
     let html = '';
-    // header — single grid, 240px label + 12 × 120px quarters
+    // header — 240px label + totalQuarters × 120px
     html += '<div class="gantt-header">';
     html += '<div class="lane-label">Track / Owner</div>';
-    for(let y=1;y<=3;y++){
+    for(let y=1;y<=totalYears;y++){
       for(let q=1;q<=4;q++){
         const yStart = q===1 ? 'year-start' : '';
         html += `<div class="qh ${yStart}">Y${y} · Q${q}</div>`;
@@ -60,11 +64,16 @@
 
     tracks.forEach(track => {
       const bars = ganttBarsState
-        .filter(b => b.TrackId === track.TrackId && !b.Hidden)
+        .filter(b => {
+          if(b.TrackId !== track.TrackId || b.Hidden) return false;
+          if(Number(b.Start) >= totalQuarters || Number(b.End) > totalQuarters){
+            console.warn(`[timeline] skipped Bar ${b.BarId}: extends past Y${totalYears} Q4`);
+            return false;
+          }
+          return true;
+        })
         .slice()
         // Stable ordering by BarId (creation time) — NOT by Start.
-        // Sorting by Start would cause bars to swap lanes on drag; this keeps
-        // each bar's lane stable so dragging moves only that bar.
         .sort((a,b) => String(a.BarId).localeCompare(String(b.BarId)));
       // Pack into lanes: per-lane list of { start, end } ranges. A bar takes
       // the lowest-index lane where it doesn't overlap any existing range.
@@ -109,6 +118,10 @@
           console.warn(`[gantt] invalid milestone quarter: ${m.Quarter}`);
           return;
         }
+        if(qIdx >= totalQuarters){
+          console.warn(`[timeline] skipped Milestone ${m.MilestoneId}: ${m.Quarter} is past Y${totalYears} Q4`);
+          return;
+        }
         const title = (m.Goal ? `${m.Name} — ${m.Goal}` : m.Name);
         html += `<div class="gbar milestone${m._pending ? ' pending' : ''}" style="grid-column:${qIdx + 1} / span 1" title="${escapeHtml(title)}">`
               + `<span class="gbar-name">${escapeHtml(m.Name)}</span>`
@@ -141,6 +154,99 @@
     `).join('');
 
     host.innerHTML = cards + `<button class="ms-add" id="milestone-add-btn" ${gateAttr || 'title="Add milestone"'}>＋</button>`;
+  }
+
+  // --- Render: Quarter-by-quarter plan ---
+  function renderQuarterPlan(){
+    const host = qs('#quarter-plan');
+    if(!host) return;
+    const canEdit = !!userName;
+    const gateAttr = canEdit ? '' : 'disabled title="Set your name first"';
+    const totalYears = Math.max(1, Number(timelineState.TotalYears) || 3);
+
+    const byId = new Map(
+      quarterPlanState.filter(r => !r.Hidden).map(r => [r.QuarterId, r])
+    );
+
+    const placeholder = `<span class="dim small">—</span>`;
+    let html = `<table class="sheet">
+      <thead><tr>
+        <th style="width:70px">Quarter</th>
+        <th>Programmer — Code</th>
+        <th>Character Artist</th>
+        <th>Environment / Concept</th>
+        <th>VFX &amp; Rigging</th>
+        <th style="width:140px">End-of-quarter gate</th>
+        <th style="width:40px"></th>
+      </tr></thead><tbody>`;
+
+    for(let y = 1; y <= totalYears; y++) for(let q = 1; q <= 4; q++){
+      const quarterLabel = `Y${y} Q${q}`;
+      const qid = `qp-y${y}q${q}`;
+      const row = byId.get(qid);
+      const pendingClass = (row && row._pending) ? ' class="pending"' : '';
+      html += `<tr${pendingClass}>
+        <td class="mono">${quarterLabel}</td>
+        <td>${row && row.ProgrammerPlan ? escapeHtml(row.ProgrammerPlan) : placeholder}</td>
+        <td>${row && row.CharPlan       ? escapeHtml(row.CharPlan)       : placeholder}</td>
+        <td>${row && row.EnvPlan        ? escapeHtml(row.EnvPlan)        : placeholder}</td>
+        <td>${row && row.VfxPlan        ? escapeHtml(row.VfxPlan)        : placeholder}</td>
+        <td>${row && row.Gate           ? escapeHtml(row.Gate)           : placeholder}</td>
+        <td><button class="row-menu-btn" data-qp-id="${qid}" data-qp-label="${quarterLabel}" ${gateAttr || 'title="Edit this quarter"'}>⋯</button></td>
+      </tr>`;
+    }
+    html += `</tbody></table>`;
+    host.innerHTML = html;
+
+    qsa('.row-menu-btn', host).forEach(btn => {
+      btn.addEventListener('click', () => {
+        if(btn.disabled) return;
+        openQuarterPlanModal(btn.getAttribute('data-qp-id'), btn.getAttribute('data-qp-label'));
+      });
+    });
+  }
+
+  function openQuarterPlanModal(qid, quarterLabel){
+    const existing = quarterPlanState.find(r => r.QuarterId === qid);
+    const row = existing || {
+      QuarterId: qid, Quarter: quarterLabel,
+      ProgrammerPlan: '', CharPlan: '', EnvPlan: '', VfxPlan: '', Gate: '',
+    };
+
+    const html = `
+      <div class="modal-panel" data-panel style="max-width:680px">
+        <h3>${escapeHtml(quarterLabel)} — plan</h3>
+        <label>Programmer — Code <textarea id="qp-prog" rows="3">${escapeHtml(row.ProgrammerPlan || '')}</textarea></label>
+        <label>Character Artist <textarea id="qp-char" rows="3">${escapeHtml(row.CharPlan || '')}</textarea></label>
+        <label>Environment / Concept <textarea id="qp-env" rows="3">${escapeHtml(row.EnvPlan || '')}</textarea></label>
+        <label>VFX &amp; Rigging <textarea id="qp-vfx" rows="3">${escapeHtml(row.VfxPlan || '')}</textarea></label>
+        <label>End-of-quarter gate <textarea id="qp-gate" rows="2">${escapeHtml(row.Gate || '')}</textarea></label>
+        <div class="modal-footer">
+          <div class="right">
+            <button class="modal-btn" data-action="cancel">Cancel</button>
+            <button class="modal-btn primary" data-action="save">Save</button>
+          </div>
+        </div>
+      </div>
+    `;
+    openModal(html, (root) => {
+      const panel = qs('[data-panel]', root);
+      qs('[data-action="cancel"]', panel).addEventListener('click', closeModal);
+      qs('[data-action="save"]', panel).addEventListener('click', () => {
+        const patch = {
+          Quarter:        quarterLabel,
+          ProgrammerPlan: qs('#qp-prog', panel).value,
+          CharPlan:       qs('#qp-char', panel).value,
+          EnvPlan:        qs('#qp-env',  panel).value,
+          VfxPlan:        qs('#qp-vfx',  panel).value,
+          Gate:           qs('#qp-gate', panel).value,
+        };
+        closeModal();
+        const p = pushRow('QuarterPlan', qid, patch);
+        renderQuarterPlan();
+        p.then(fetchIfIdle);
+      });
+    });
   }
 
   // --- Render: Phases table ---
@@ -359,6 +465,8 @@
   let ganttTracksState = [];       // array of GanttTrack objects
   let ganttBarsState   = [];       // array of GanttBar objects
   let milestonesState  = [];       // array of Milestone objects
+  let timelineState    = { TotalYears: 3 }; // singleton; sheet row merged over this default
+  let quarterPlanState = [];       // array of QuarterPlan objects
   let userName        = '';        // cached identity
   let syncStatus      = 'idle';
   let lastSyncAt      = null;
@@ -392,6 +500,8 @@
       ganttTracksState = (json.ganttTracks || []).map(normalizeGanttTrackRow);
       ganttBarsState   = (json.ganttBars   || []).map(normalizeGanttBarRow);
       milestonesState  = (json.milestones  || []).map(normalizeMilestoneRow);
+      timelineState    = normalizeTimelineRow(json.timeline);
+      quarterPlanState = (json.quarterPlan || []).map(normalizeQuarterPlanRow);
       lastSyncAt = new Date();
       setSyncStatus('ok');
       const anyEmpty =
@@ -408,6 +518,8 @@
       renderSystems();
       renderGantt();
       renderMilestones();
+      renderQuarterPlan();
+      updateTimelineChip();
       if(!userName){
         const n = (prompt('Enter your name — shown on tasks you create or update. You can change it later.') || '').trim();
         if(n){
@@ -427,46 +539,63 @@
   }
 
   async function bootstrapIfEmpty(){
-    // Idempotent: only seeds the three new Roadmap tabs when they're all empty.
-    if(ganttTracksState.length || ganttBarsState.length || milestonesState.length) return;
-    if(!window.GANTT || !window.MILESTONES) return;
+    const needsRoadmap = !ganttTracksState.length && !ganttBarsState.length && !milestonesState.length
+                          && window.GANTT && window.MILESTONES;
+    // Treat default-fallback timelineState (no UpdatedAt) as "sheet empty" — a real row would have UpdatedAt.
+    const needsTimeline    = !timelineState || !timelineState.UpdatedAt;
+    const needsQuarterPlan = !quarterPlanState.length && !!window.QUARTER_PLAN;
+    if(!needsRoadmap && !needsTimeline && !needsQuarterPlan) return;
 
-    const tracks = [];
-    const bars = [];
-    window.GANTT.forEach((lane, laneIdx) => {
-      // Skip the legacy "Milestones" lane — that data lives in the Milestones tab now.
-      if((lane.role || '').toLowerCase() === 'milestone') return;
-      const trackId = genId('track');
-      tracks.push({
-        TrackId: trackId,
-        Name: lane.who || lane.name || 'Track',
-        Role: lane.role || 'code',
-        Order: laneIdx,
-        Hidden: false,
-        SortOrder: laneIdx,
-      });
-      (lane.bars || []).forEach((b, bi) => {
-        bars.push({
-          BarId: genId('bar'),
-          TrackId: trackId,
-          Name: b.name,
-          Start: b.start,
-          End: b.end,
-          Color: b.color || lane.role || 'code',
-          Hidden: false,
-          SortOrder: bi,
+    const tabs = {};
+
+    if(needsRoadmap){
+      const tracks = [];
+      const bars = [];
+      window.GANTT.forEach((lane, laneIdx) => {
+        if((lane.role || '').toLowerCase() === 'milestone') return;
+        const trackId = genId('track');
+        tracks.push({
+          TrackId: trackId, Name: lane.who || lane.name || 'Track',
+          Role: lane.role || 'code', Order: laneIdx,
+          Hidden: false, SortOrder: laneIdx,
+        });
+        (lane.bars || []).forEach((b, bi) => {
+          bars.push({
+            BarId: genId('bar'), TrackId: trackId, Name: b.name,
+            Start: b.start, End: b.end, Color: b.color || lane.role || 'code',
+            Hidden: false, SortOrder: bi,
+          });
         });
       });
-    });
+      const milestones = window.MILESTONES.map((m, i) => ({
+        MilestoneId: genId('ms'),
+        Quarter: m.q || m.quarter || '',
+        Name: m.name || '', Goal: m.goal || '',
+        Hidden: false, SortOrder: i,
+      }));
+      tabs.GanttTracks = tracks;
+      tabs.GanttBars   = bars;
+      tabs.Milestones  = milestones;
+    }
 
-    const milestones = window.MILESTONES.map((m, i) => ({
-      MilestoneId: genId('ms'),
-      Quarter: m.q || m.quarter || '',
-      Name: m.name || '',
-      Goal: m.goal || '',
-      Hidden: false,
-      SortOrder: i,
-    }));
+    if(needsTimeline){
+      tabs.Timeline = [{ Key: 'config', TotalYears: 3 }];
+    }
+
+    if(needsQuarterPlan){
+      tabs.QuarterPlan = window.QUARTER_PLAN.map((r, i) => ({
+        QuarterId:      r.QuarterId,
+        Quarter:        r.Quarter,
+        ProgrammerPlan: r.programmer || '',
+        CharPlan:       r.char       || '',
+        EnvPlan:        r.env        || '',
+        VfxPlan:        r.vfx        || '',
+        Gate:           r.gate       || '',
+        Hidden: false, SortOrder: i,
+      }));
+    }
+
+    if(!Object.keys(tabs).length) return;
 
     try{
       await fetch(SHEET_ENDPOINT, {
@@ -475,7 +604,7 @@
         body: JSON.stringify({
           Action: 'bootstrap',
           UpdatedBy: userName || 'bootstrap',
-          Tabs: { GanttTracks: tracks, GanttBars: bars, Milestones: milestones },
+          Tabs: tabs,
         }),
       });
       await fetchAll();
@@ -538,10 +667,26 @@
       const patch = Object.assign({}, fields, stamp);
       if(i >= 0) milestonesState[i] = Object.assign({}, milestonesState[i], patch);
       else       milestonesState.push(Object.assign({ MilestoneId: key, CreatedAt: nowIso }, patch));
+    } else if(tab === 'Timeline'){
+      // Singleton — merge into the object, not an array.
+      timelineState = Object.assign({}, timelineState, fields, stamp);
+    } else if(tab === 'QuarterPlan'){
+      const i = quarterPlanState.findIndex(x => x.QuarterId === key);
+      const patch = Object.assign({}, fields, stamp);
+      if(i >= 0) quarterPlanState[i] = Object.assign({}, quarterPlanState[i], patch);
+      else       quarterPlanState.push(Object.assign({ QuarterId: key, CreatedAt: nowIso }, patch));
     }
   }
 
   function clearPendingFlag(tab, key){
+    if(tab === 'Timeline'){
+      if(timelineState && timelineState._pending){
+        const copy = Object.assign({}, timelineState);
+        delete copy._pending;
+        timelineState = copy;
+      }
+      return;
+    }
     const target =
       tab === 'Tasks'       ? { arr: taskState,        idField: 'TaskId'      } :
       tab === 'Team'        ? { arr: teamState,        idField: 'MemberId'    } :
@@ -551,7 +696,8 @@
       tab === 'Systems'     ? { arr: systemsState,     idField: 'Id'          } :
       tab === 'GanttTracks' ? { arr: ganttTracksState, idField: 'TrackId'     } :
       tab === 'GanttBars'   ? { arr: ganttBarsState,   idField: 'BarId'       } :
-      tab === 'Milestones'  ? { arr: milestonesState,  idField: 'MilestoneId' } : null;
+      tab === 'Milestones'  ? { arr: milestonesState,  idField: 'MilestoneId' } :
+      tab === 'QuarterPlan' ? { arr: quarterPlanState, idField: 'QuarterId'   } : null;
     if(!target) return;
     const i = target.arr.findIndex(x => x[target.idField] === key);
     if(i >= 0 && target.arr[i]._pending){
@@ -737,6 +883,32 @@
       UpdatedBy:   String(r.UpdatedBy || ''),
     };
   }
+  function normalizeTimelineRow(r){
+    if(!r) return { TotalYears: 3 };
+    const n = Number(r.TotalYears);
+    return {
+      Key:        String(r.Key || 'config'),
+      TotalYears: (Number.isFinite(n) && n >= 1) ? Math.floor(n) : 3,
+      UpdatedAt:  String(r.UpdatedAt || ''),
+      UpdatedBy:  String(r.UpdatedBy || ''),
+    };
+  }
+  function normalizeQuarterPlanRow(r){
+    return {
+      QuarterId:      String(r.QuarterId || ''),
+      Quarter:        String(r.Quarter || ''),
+      ProgrammerPlan: String(r.ProgrammerPlan || ''),
+      CharPlan:       String(r.CharPlan || ''),
+      EnvPlan:        String(r.EnvPlan || ''),
+      VfxPlan:        String(r.VfxPlan || ''),
+      Gate:           String(r.Gate || ''),
+      Hidden:         r.Hidden === true || r.Hidden === 'TRUE' || r.Hidden === 'true',
+      SortOrder:      Number(r.SortOrder) || 0,
+      CreatedAt:      String(r.CreatedAt || ''),
+      UpdatedAt:      String(r.UpdatedAt || ''),
+      UpdatedBy:      String(r.UpdatedBy || ''),
+    };
+  }
 
   function setSyncStatus(s){ syncStatus = s; updateSyncPill(); }
   function updateSyncPill(){
@@ -915,6 +1087,8 @@
   function renderAll(){
     renderGantt();
     renderMilestones();
+    renderQuarterPlan();
+    updateTimelineChip();
     renderPhases();
     renderCharacters();
     renderItems();
@@ -973,6 +1147,14 @@
       tracksBtn.addEventListener('click', () => {
         if(!userName){ alert('Set your name first (click "Change name").'); return; }
         openTracksModal();
+      });
+    }
+    // timeline button (Roadmap tab)
+    const timelineBtn = qs('#timeline-btn');
+    if(timelineBtn){
+      timelineBtn.addEventListener('click', () => {
+        if(!userName){ alert('Set your name first (click "Change name").'); return; }
+        openTimelineModal();
       });
     }
 
@@ -1313,6 +1495,7 @@
 
   function onBarPointerMove(e){
     if(!dragState) return;
+    const totalQuarters = Math.max(1, Number(timelineState.TotalYears) || 3) * 4;
     const delta = Math.round((e.clientX - dragState.startX) / GANTT_COLUMN_PX);
     let s = dragState.origStart, en = dragState.origEnd;
     if(dragState.zone === 'move'){ s += delta; en += delta; }
@@ -1323,9 +1506,9 @@
       if(dragState.zone === 'move') en += (0 - s);
       s = 0;
     }
-    if(en > 12){
-      if(dragState.zone === 'move') s -= (en - 12);
-      en = 12;
+    if(en > totalQuarters){
+      if(dragState.zone === 'move') s -= (en - totalQuarters);
+      en = totalQuarters;
     }
     if(en - s < 1){
       if(dragState.zone === 'start') s = en - 1;
@@ -1371,16 +1554,18 @@
     const bar = ganttBarsState.find(b => b.BarId === barId);
     if(!bar){ alert('Bar not found.'); return; }
     const COLOR_OPTS = ['portal','code','char','env','vfx'];
+    const totalYears    = Math.max(1, Number(timelineState.TotalYears) || 3);
+    const totalQuarters = totalYears * 4;
 
     const startOpts = [];
-    for(let i = 0; i <= 11; i++){
+    for(let i = 0; i < totalQuarters; i++){
       const y = Math.floor(i/4) + 1, q = (i % 4) + 1;
       startOpts.push(`<option value="${i}" ${Number(bar.Start)===i?'selected':''}>Y${y} Q${q}</option>`);
     }
     const endOpts = [];
-    for(let i = 1; i <= 12; i++){
+    for(let i = 1; i <= totalQuarters; i++){
       const y = Math.floor((i-1)/4) + 1, q = ((i-1) % 4) + 1;
-      const label = (i === 12) ? 'end of Y3 Q4' : `Y${y} Q${q} (end)`;
+      const label = (i === totalQuarters) ? `end of Y${totalYears} Q4` : `Y${y} Q${q} (end)`;
       endOpts.push(`<option value="${i}" ${Number(bar.End)===i?'selected':''}>${label}</option>`);
     }
     const colorOpts = COLOR_OPTS.map(c => `<option value="${c}" ${bar.Color===c?'selected':''}>${c}</option>`).join('');
@@ -1429,9 +1614,10 @@
   function openMilestoneModal(milestoneId){
     const m = milestonesState.find(x => x.MilestoneId === milestoneId);
     if(!m){ alert('Milestone not found.'); return; }
+    const totalYears = Math.max(1, Number(timelineState.TotalYears) || 3);
 
     const quarterOpts = [];
-    for(let y = 1; y <= 3; y++) for(let q = 1; q <= 4; q++){
+    for(let y = 1; y <= totalYears; y++) for(let q = 1; q <= 4; q++){
       const s = `Y${y} Q${q}`;
       quarterOpts.push(`<option value="${s}" ${m.Quarter===s?'selected':''}>${s}</option>`);
     }
@@ -1477,11 +1663,12 @@
   }
 
   function addMilestone(){
+    const totalYears = Math.max(1, Number(timelineState.TotalYears) || 3);
     const taken = new Set(
       milestonesState.filter(m => !m.Hidden).map(m => m.Quarter)
     );
     let quarter = 'Y1 Q1';
-    outer: for(let y = 1; y <= 3; y++) for(let q = 1; q <= 4; q++){
+    outer: for(let y = 1; y <= totalYears; y++) for(let q = 1; q <= 4; q++){
       const s = `Y${y} Q${q}`;
       if(!taken.has(s)){ quarter = s; break outer; }
     }
@@ -1499,6 +1686,42 @@
     renderMilestones();
     openMilestoneModal(newId);
     p.then(fetchIfIdle);
+  }
+
+  function openTimelineModal(){
+    const currentYears = Math.max(1, Number(timelineState.TotalYears) || 3);
+    const html = `
+      <div class="modal-panel" data-panel style="max-width:420px">
+        <h3>Timeline length</h3>
+        <p class="small" style="color:var(--ink-3);margin-top:-8px">How many years the Gantt + Quarter plan span. Bars or milestones that fall past the new end are hidden (not deleted) until you expand back.</p>
+        <label>Total years <input type="number" id="tl-years" min="1" max="10" value="${currentYears}"></label>
+        <div class="modal-footer">
+          <div class="right">
+            <button class="modal-btn" data-action="cancel">Cancel</button>
+            <button class="modal-btn primary" data-action="save">Save</button>
+          </div>
+        </div>
+      </div>
+    `;
+    openModal(html, (root) => {
+      const panel = qs('[data-panel]', root);
+      qs('[data-action="cancel"]', panel).addEventListener('click', closeModal);
+      qs('[data-action="save"]', panel).addEventListener('click', () => {
+        const n = Math.max(1, Math.floor(Number(qs('#tl-years', panel).value) || 3));
+        closeModal();
+        const p = pushRow('Timeline', 'config', { Key: 'config', TotalYears: n });
+        renderGantt();
+        renderMilestones();
+        renderQuarterPlan();
+        updateTimelineChip();
+        p.then(fetchIfIdle);
+      });
+    });
+  }
+
+  function updateTimelineChip(){
+    const el = qs('#timeline-years');
+    if(el) el.textContent = String(Math.max(1, Number(timelineState.TotalYears) || 3));
   }
 
   function openTracksModal(){

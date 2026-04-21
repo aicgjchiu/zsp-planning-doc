@@ -140,7 +140,7 @@ table.sheet td.dim{color:var(--ink-3)}
   min-width:1680px; /* 240 label + 12 * 120 quarter */
 }
 .gantt-header{
-  display:grid;grid-template-columns:240px repeat(12, 120px);
+  display:grid;grid-template-columns:240px repeat(var(--total-quarters, 12), 120px);
   border-bottom:1px solid var(--line);background:var(--bg-3);
   position:sticky;top:0;z-index:2;
 }
@@ -152,7 +152,7 @@ table.sheet td.dim{color:var(--ink-3)}
 .gantt-header .qh.year-start{color:var(--ink);background:oklch(0.92 0.01 85);font-weight:600}
 
 .gantt-row{
-  display:grid;grid-template-columns:240px repeat(12, 120px);
+  display:grid;grid-template-columns:240px repeat(var(--total-quarters, 12), 120px);
   border-bottom:1px solid var(--line);
   --lane-count:1;
   min-height:calc(var(--lane-count) * 42px + 16px);
@@ -164,8 +164,8 @@ table.sheet td.dim{color:var(--ink-3)}
   border-right:1px solid var(--line);position:sticky;left:0;z-index:1;
 }
 .gantt-row .track{
-  position:relative;grid-column:2 / span 12;
-  display:grid;grid-template-columns:repeat(12, 120px);
+  position:relative;grid-column:2 / span var(--total-quarters, 12);
+  display:grid;grid-template-columns:repeat(var(--total-quarters, 12), 120px);
   grid-auto-rows:42px;
   padding:8px 0;
 }
