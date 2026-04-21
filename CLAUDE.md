@@ -126,6 +126,7 @@ Live URL: https://aicgjchiu.github.io/zsp-planning-doc/
 - **Claude preview sandbox blocks the fetch.** If you're previewing the page inside the Claude artifact sandbox (`claudeusercontent.com`), the Task Board will be stuck on "Connecting…" — cross-origin fetches to `script.google.com` are blocked in that sandbox. Test the sync on the deployed GitHub Pages URL or from `file://`, not inside the Claude preview.
 - **Don't add a framework.** The whole appeal of this repo is that anyone on the team can open the files and hand-edit content in `data.js`. Keep it buildless.
 - **Pending cleanup — `window.GANTT` / `window.MILESTONES`.** These globals in `data.js` are kept to seed the Roadmap sheet tabs on first deploy (via `bootstrapIfEmpty`). Once the live sheet is confirmed populated, a follow-up PR should retire them, remove the bootstrap seed-building path from `app.js`, and drop the legacy-shape compatibility branch from `handleBootstrap` in `apps-script.gs`.
+- **Writes are fully optimistic.** Every `pushRow(...)` mutates local state synchronously *before* the POST fires, and stamps `_pending: true` on the row; renderers attach a `.pending` class (dashed outline on cards, left-side inset shadow on table rows, dashed outline on Gantt bars) while the flag is live. `pushRow` clears `_pending` when the POST settles. If the POST fails, the existing `alert()` fires and the sync pill turns red — the row keeps its pending style until the next 30-second poll reconciles it back to server truth. No rollback on error — the poll is the rollback.
 
 ## When Editing
 
