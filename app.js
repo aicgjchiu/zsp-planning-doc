@@ -1666,9 +1666,9 @@
           fields.Hidden = false;
         }
         closeModal();
-        await pushRow('Systems', key, fields);
+        const p = pushRow('Systems', key, fields);
         renderSystems();
-        fetchAll();
+        p.then(() => fetchAll());
       });
       if(!isNew){
         qs('[data-action="delete"]', panel).addEventListener('click', () => {
@@ -1681,11 +1681,11 @@
             </div>
           `;
           qs('[data-action="cancel-delete"]', footer).addEventListener('click', closeModal);
-          qs('[data-action="confirm-delete"]', footer).addEventListener('click', async () => {
+          qs('[data-action="confirm-delete"]', footer).addEventListener('click', () => {
             closeModal();
-            await pushRow('Systems', s.Id, { Hidden: true });
+            const p = pushRow('Systems', s.Id, { Hidden: true });
             renderSystems();
-            fetchAll();
+            p.then(() => fetchAll());
           });
         });
       }
@@ -1789,9 +1789,9 @@
           fields.Hidden = false;
         }
         closeModal();
-        await pushRow('Characters', key, fields);
+        const p = pushRow('Characters', key, fields);
         renderCharacters();
-        fetchAll();
+        p.then(() => fetchAll());
       });
       if(!isNew){
         qs('[data-action="delete"]', panel).addEventListener('click', () => {
@@ -1804,11 +1804,11 @@
             </div>
           `;
           qs('[data-action="cancel-delete"]', footer).addEventListener('click', closeModal);
-          qs('[data-action="confirm-delete"]', footer).addEventListener('click', async () => {
+          qs('[data-action="confirm-delete"]', footer).addEventListener('click', () => {
             closeModal();
-            await pushRow('Characters', c.Id, { Hidden: true });
+            const p = pushRow('Characters', c.Id, { Hidden: true });
             renderCharacters();
-            fetchAll();
+            p.then(() => fetchAll());
           });
         });
       }
@@ -1861,9 +1861,9 @@
           fields.Hidden = false;
         }
         closeModal();
-        await pushRow('Maps', key, fields);
+        const p = pushRow('Maps', key, fields);
         renderMaps();
-        fetchAll();
+        p.then(() => fetchAll());
       });
       if(!isNew){
         qs('[data-action="delete"]', panel).addEventListener('click', () => {
@@ -1876,11 +1876,11 @@
             </div>
           `;
           qs('[data-action="cancel-delete"]', footer).addEventListener('click', closeModal);
-          qs('[data-action="confirm-delete"]', footer).addEventListener('click', async () => {
+          qs('[data-action="confirm-delete"]', footer).addEventListener('click', () => {
             closeModal();
-            await pushRow('Maps', m.Id, { Hidden: true });
+            const p = pushRow('Maps', m.Id, { Hidden: true });
             renderMaps();
-            fetchAll();
+            p.then(() => fetchAll());
           });
         });
       }
@@ -1937,9 +1937,9 @@
           fields.Hidden = false;
         }
         closeModal();
-        await pushRow('Items', key, fields);
+        const p = pushRow('Items', key, fields);
         renderItems();
-        fetchAll();
+        p.then(() => fetchAll());
       });
       if(!isNew){
         qs('[data-action="delete"]', panel).addEventListener('click', () => {
@@ -1952,11 +1952,11 @@
             </div>
           `;
           qs('[data-action="cancel-delete"]', footer).addEventListener('click', closeModal);
-          qs('[data-action="confirm-delete"]', footer).addEventListener('click', async () => {
+          qs('[data-action="confirm-delete"]', footer).addEventListener('click', () => {
             closeModal();
-            await pushRow('Items', it.Id, { Hidden: true });
+            const p = pushRow('Items', it.Id, { Hidden: true });
             renderItems();
-            fetchAll();
+            p.then(() => fetchAll());
           });
         });
       }
