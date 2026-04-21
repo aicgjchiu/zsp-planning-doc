@@ -945,7 +945,7 @@
           const track = ganttTracksState.find(t => t.TrackId === trackId);
           if(!track) return;
           const newId = genId('bar');
-          await pushRow('GanttBars', newId, {
+          const fields = {
             BarId: newId,
             TrackId: trackId,
             Name: 'New bar',
@@ -954,9 +954,12 @@
             Color: track.Role || 'code',
             Hidden: false,
             SortOrder: 0,
-          });
-          await fetchAll();
+          };
+          // Optimistic: mutate state, render, open modal immediately. Server sync in background.
+          ganttBarsState.push(normalizeGanttBarRow(fields));
+          renderGantt();
           openBarModal(newId);
+          pushRow('GanttBars', newId, fields).then(() => fetchAll());
         }
       });
     }
@@ -1347,23 +1350,28 @@
     openModal(html, (root) => {
       const panel = qs('[data-panel]', root);
       qs('[data-action="cancel"]', panel).addEventListener('click', closeModal);
-      qs('[data-action="delete"]', panel).addEventListener('click', async () => {
+      qs('[data-action="delete"]', panel).addEventListener('click', () => {
         if(!confirm('Delete this bar?')) return;
         closeModal();
-        await pushRow('GanttBars', bar.BarId, { Hidden: true });
-        await fetchAll();
+        // Optimistic
+        const i = ganttBarsState.findIndex(b => b.BarId === bar.BarId);
+        if(i >= 0) ganttBarsState[i] = Object.assign({}, ganttBarsState[i], { Hidden: true });
+        renderGantt();
+        pushRow('GanttBars', bar.BarId, { Hidden: true }).then(() => fetchAll());
       });
-      qs('[data-action="save"]', panel).addEventListener('click', async () => {
+      qs('[data-action="save"]', panel).addEventListener('click', () => {
         const name = qs('#bar-name', panel).value.trim();
         const color = qs('#bar-color', panel).value;
         const start = Number(qs('#bar-start', panel).value);
         const end = Number(qs('#bar-end', panel).value);
         if(end <= start){ alert('End must be after Start.'); return; }
         closeModal();
-        await pushRow('GanttBars', bar.BarId, {
-          Name: name, Color: color, Start: start, End: end,
-        });
-        await fetchAll();
+        // Optimistic
+        const patch = { Name: name, Color: color, Start: start, End: end };
+        const i = ganttBarsState.findIndex(b => b.BarId === bar.BarId);
+        if(i >= 0) ganttBarsState[i] = Object.assign({}, ganttBarsState[i], patch);
+        renderGantt();
+        pushRow('GanttBars', bar.BarId, patch).then(() => fetchAll());
       });
     });
   }
@@ -1396,26 +1404,31 @@
     openModal(html, (root) => {
       const panel = qs('[data-panel]', root);
       qs('[data-action="cancel"]', panel).addEventListener('click', closeModal);
-      qs('[data-action="delete"]', panel).addEventListener('click', async () => {
+      qs('[data-action="delete"]', panel).addEventListener('click', () => {
         if(!confirm('Delete this milestone?')) return;
         closeModal();
-        await pushRow('Milestones', m.MilestoneId, { Hidden: true });
-        await fetchAll();
+        const i = milestonesState.findIndex(x => x.MilestoneId === m.MilestoneId);
+        if(i >= 0) milestonesState[i] = Object.assign({}, milestonesState[i], { Hidden: true });
+        renderGantt();
+        renderMilestones();
+        pushRow('Milestones', m.MilestoneId, { Hidden: true }).then(() => fetchAll());
       });
-      qs('[data-action="save"]', panel).addEventListener('click', async () => {
+      qs('[data-action="save"]', panel).addEventListener('click', () => {
         const quarter = qs('#ms-quarter', panel).value;
         const name = qs('#ms-name', panel).value.trim();
         const goal = qs('#ms-goal', panel).value;
         closeModal();
-        await pushRow('Milestones', m.MilestoneId, {
-          Quarter: quarter, Name: name, Goal: goal,
-        });
-        await fetchAll();
+        const patch = { Quarter: quarter, Name: name, Goal: goal };
+        const i = milestonesState.findIndex(x => x.MilestoneId === m.MilestoneId);
+        if(i >= 0) milestonesState[i] = Object.assign({}, milestonesState[i], patch);
+        renderGantt();
+        renderMilestones();
+        pushRow('Milestones', m.MilestoneId, patch).then(() => fetchAll());
       });
     });
   }
 
-  async function addMilestone(){
+  function addMilestone(){
     const taken = new Set(
       milestonesState.filter(m => !m.Hidden).map(m => m.Quarter)
     );
@@ -1425,15 +1438,20 @@
       if(!taken.has(s)){ quarter = s; break outer; }
     }
     const newId = genId('ms');
-    await pushRow('Milestones', newId, {
+    const fields = {
       MilestoneId: newId,
       Quarter: quarter,
       Name: 'New milestone',
       Goal: '',
       Hidden: false,
       SortOrder: 0,
-    });
-    await fetchAll();
+    };
+    // Optimistic
+    milestonesState.push(normalizeMilestoneRow(fields));
+    renderGantt();
+    renderMilestones();
+    openMilestoneModal(newId);
+    pushRow('Milestones', newId, fields).then(() => fetchAll());
   }
 
   function openTracksModal(){
