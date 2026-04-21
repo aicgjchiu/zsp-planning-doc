@@ -392,20 +392,18 @@ html.zsp-locked body > *:not(#zsp-lock-gate) { display: none !important; }
 #zsp-lock-gate .lock-err { color: oklch(0.62 0.2 25); font-size: 12px; min-height: 14px; }
 
 /* ---- Design Doc edit affordances ---- */
-/* + Add button in section headers — matches .aside monospace style */
+/* + Add icon button in section headers */
 .section-add { margin-left: 8px; display: inline-flex; flex-shrink: 0; align-self: center; }
 .section-add button {
   background: transparent;
   border: 1px solid var(--line);
   border-radius: 4px;
-  padding: 5px 12px;
+  width: 22px; height: 22px;
+  padding: 0;
   cursor: pointer;
   font-family: var(--mono);
-  font-size: 10.5px;
-  letter-spacing: 0.08em;
+  font-size: 14px; line-height: 1;
   color: var(--ink-3);
-  line-height: 1.2;
-  white-space: nowrap;
   transition: color 0.12s, border-color 0.12s, background 0.12s;
 }
 .section-add button:hover { color: var(--ink); border-color: var(--line-2); background: var(--bg-2); }

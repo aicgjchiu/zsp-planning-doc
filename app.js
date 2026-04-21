@@ -1109,15 +1109,16 @@
   function mountSectionAddButtons(){
     const canEdit = !!userName;
     const mounts = [
-      { id:'add-character-btn', label:'+ Character', onClick:() => openCharacterModal(null) },
-      { id:'add-item-btn',      label:'+ Item',      onClick:() => openItemModal(null) },
-      { id:'add-map-btn',       label:'+ Map',       onClick:() => openMapModal(null) },
-      { id:'add-system-btn',    label:'+ System',    onClick:() => openSystemModal(null) },
+      { id:'add-character-btn', tip:'Add character', onClick:() => openCharacterModal(null) },
+      { id:'add-item-btn',      tip:'Add item',      onClick:() => openItemModal(null) },
+      { id:'add-map-btn',       tip:'Add map',       onClick:() => openMapModal(null) },
+      { id:'add-system-btn',    tip:'Add system',    onClick:() => openSystemModal(null) },
     ];
     mounts.forEach(m => {
       const host = qs('#' + m.id);
       if(!host) return;
-      host.innerHTML = `<button ${canEdit?'':'disabled title="Set your name first"'}>${m.label}</button>`;
+      const tip = canEdit ? m.tip : 'Set your name first';
+      host.innerHTML = `<button title="${tip}" ${canEdit?'':'disabled'}>+</button>`;
       const btn = qs('button', host);
       if(btn && canEdit) btn.addEventListener('click', m.onClick);
     });
