@@ -996,11 +996,10 @@
             Hidden: false,
             SortOrder: 0,
           };
-          // Optimistic: mutate state, render, open modal immediately. Server sync in background.
-          ganttBarsState.push(normalizeGanttBarRow(fields));
+          const p = pushRow('GanttBars', newId, fields);
           renderGantt();
           openBarModal(newId);
-          pushRow('GanttBars', newId, fields).then(() => fetchAll());
+          p.then(() => fetchAll());
         }
       });
     }
@@ -1321,18 +1320,12 @@
     if(s !== dragState.origStart || en !== dragState.origEnd) dragState.moved = true;
   }
 
-  async function onBarPointerUp(e){
+  function onBarPointerUp(e){
     if(!dragState) return;
-    const { barId, el, origStart, origEnd, newStart, newEnd, moved } = dragState;
+    const { barId, origStart, origEnd, newStart, newEnd, moved } = dragState;
     cleanupDrag(e);
     if(!moved || (newStart === origStart && newEnd === origEnd)) return;
-    try{
-      await pushRow('GanttBars', barId, { Start: newStart, End: newEnd });
-      await fetchAll();
-    }catch(err){
-      console.warn('[drag] commit failed:', err);
-      el.style.gridColumn = `${origStart + 1} / span ${origEnd - origStart}`;
-    }
+    pushRow('GanttBars', barId, { Start: newStart, End: newEnd }).then(() => fetchAll());
   }
 
   function onBarPointerCancel(e){
@@ -1394,11 +1387,9 @@
       qs('[data-action="delete"]', panel).addEventListener('click', () => {
         if(!confirm('Delete this bar?')) return;
         closeModal();
-        // Optimistic
-        const i = ganttBarsState.findIndex(b => b.BarId === bar.BarId);
-        if(i >= 0) ganttBarsState[i] = Object.assign({}, ganttBarsState[i], { Hidden: true });
+        const p = pushRow('GanttBars', bar.BarId, { Hidden: true });
         renderGantt();
-        pushRow('GanttBars', bar.BarId, { Hidden: true }).then(() => fetchAll());
+        p.then(() => fetchAll());
       });
       qs('[data-action="save"]', panel).addEventListener('click', () => {
         const name = qs('#bar-name', panel).value.trim();
@@ -1407,12 +1398,10 @@
         const end = Number(qs('#bar-end', panel).value);
         if(end <= start){ alert('End must be after Start.'); return; }
         closeModal();
-        // Optimistic
         const patch = { Name: name, Color: color, Start: start, End: end };
-        const i = ganttBarsState.findIndex(b => b.BarId === bar.BarId);
-        if(i >= 0) ganttBarsState[i] = Object.assign({}, ganttBarsState[i], patch);
+        const p = pushRow('GanttBars', bar.BarId, patch);
         renderGantt();
-        pushRow('GanttBars', bar.BarId, patch).then(() => fetchAll());
+        p.then(() => fetchAll());
       });
     });
   }
@@ -1448,11 +1437,10 @@
       qs('[data-action="delete"]', panel).addEventListener('click', () => {
         if(!confirm('Delete this milestone?')) return;
         closeModal();
-        const i = milestonesState.findIndex(x => x.MilestoneId === m.MilestoneId);
-        if(i >= 0) milestonesState[i] = Object.assign({}, milestonesState[i], { Hidden: true });
+        const p = pushRow('Milestones', m.MilestoneId, { Hidden: true });
         renderGantt();
         renderMilestones();
-        pushRow('Milestones', m.MilestoneId, { Hidden: true }).then(() => fetchAll());
+        p.then(() => fetchAll());
       });
       qs('[data-action="save"]', panel).addEventListener('click', () => {
         const quarter = qs('#ms-quarter', panel).value;
@@ -1460,11 +1448,10 @@
         const goal = qs('#ms-goal', panel).value;
         closeModal();
         const patch = { Quarter: quarter, Name: name, Goal: goal };
-        const i = milestonesState.findIndex(x => x.MilestoneId === m.MilestoneId);
-        if(i >= 0) milestonesState[i] = Object.assign({}, milestonesState[i], patch);
+        const p = pushRow('Milestones', m.MilestoneId, patch);
         renderGantt();
         renderMilestones();
-        pushRow('Milestones', m.MilestoneId, patch).then(() => fetchAll());
+        p.then(() => fetchAll());
       });
     });
   }
@@ -1487,12 +1474,11 @@
       Hidden: false,
       SortOrder: 0,
     };
-    // Optimistic
-    milestonesState.push(normalizeMilestoneRow(fields));
+    const p = pushRow('Milestones', newId, fields);
     renderGantt();
     renderMilestones();
     openMilestoneModal(newId);
-    pushRow('Milestones', newId, fields).then(() => fetchAll());
+    p.then(() => fetchAll());
   }
 
   function openTracksModal(){
