@@ -830,7 +830,7 @@
           card.classList.remove('st-todo','st-progress','st-blocked','st-done');
           card.classList.add('st-'+v);
         }
-        pushRow('Tasks', id, { Status: v }).then(() => fetchAll());
+        pushRow('Tasks', id, { Status: v });
       });
     });
     qsa('.t-notes', host).forEach(ta => {
@@ -1111,8 +1111,7 @@
           fields.Notes = '';
         }
         closeModal();
-        await pushRow('Tasks', key, fields);
-        fetchAll();
+        pushRow('Tasks', key, fields).then(() => fetchAll());
       });
       if(!isNew){
         qs('[data-action="delete"]', panel).addEventListener('click', () => {
@@ -1125,10 +1124,9 @@
             </div>
           `;
           qs('[data-action="cancel-delete"]', footer).addEventListener('click', closeModal);
-          qs('[data-action="confirm-delete"]', footer).addEventListener('click', async () => {
+          qs('[data-action="confirm-delete"]', footer).addEventListener('click', () => {
             closeModal();
-            await pushRow('Tasks', t.TaskId, { Hidden: true });
-            fetchAll();
+            pushRow('Tasks', t.TaskId, { Hidden: true }).then(() => fetchAll());
           });
         });
       }
@@ -1237,12 +1235,12 @@
             || orig.Order !== m.Order
             || orig.Active !== m.Active;
           if(changed){
-            await pushRow('Team', m.MemberId, {
+            pushRow('Team', m.MemberId, {
               Name: m.Name, RoleKey: m.RoleKey, RoleLabel: m.RoleLabel, Order: m.Order, Active: m.Active,
             });
           }
         }
-        fetchAll();
+        setTimeout(() => fetchAll(), 100);
       });
     }
 
@@ -1575,12 +1573,12 @@
         rerender(root);
       });
       qs('[data-action="cancel"]', panel).addEventListener('click', closeModal);
-      qs('[data-action="save"]', panel).addEventListener('click', async () => {
+      qs('[data-action="save"]', panel).addEventListener('click', () => {
         closeModal();
         for(const t of draft){
           if(t._delete){
             if(!t._isNew){
-              await pushRow('GanttTracks', t.TrackId, { Hidden: true });
+              pushRow('GanttTracks', t.TrackId, { Hidden: true });
             }
             continue;
           }
@@ -1590,12 +1588,12 @@
             || orig.Role !== t.Role
             || orig.Order !== t.Order;
           if(changed){
-            await pushRow('GanttTracks', t.TrackId, {
+            pushRow('GanttTracks', t.TrackId, {
               TrackId: t.TrackId, Name: t.Name, Role: t.Role, Order: t.Order,
             });
           }
         }
-        fetchAll();
+        setTimeout(() => fetchAll(), 100);
       });
     }
 
