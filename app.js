@@ -104,7 +104,10 @@
           return;
         }
         const title = (m.Goal ? `${m.Name} — ${m.Goal}` : m.Name);
-        html += `<div class="gbar milestone" style="grid-column:${qIdx + 1} / span 1" title="${escapeHtml(title)}">${escapeHtml(m.Name)}</div>`;
+        html += `<div class="gbar milestone" style="grid-column:${qIdx + 1} / span 1" title="${escapeHtml(title)}">`
+              + `<span class="gbar-name">${escapeHtml(m.Name)}</span>`
+              + `<button class="gbar-more ms-row-more" data-milestone-id="${escapeHtml(m.MilestoneId)}" ${gateAttr || 'title="Edit milestone"'}>⋯</button>`
+              + `</div>`;
       });
     html += `</div></div>`;
 
@@ -935,6 +938,8 @@
         if(moreBtn){
           e.stopPropagation();
           if(!userName){ alert('Set your name first (click "Change name").'); return; }
+          const msId = moreBtn.getAttribute('data-milestone-id');
+          if(msId){ openMilestoneModal(msId); return; }
           openBarModal(moreBtn.getAttribute('data-bar-id'));
           return;
         }

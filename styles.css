@@ -491,6 +491,8 @@ html.zsp-locked body > *:not(#zsp-lock-gate) { display: none !important; }
 
 .gantt-milestone-row .gbar{cursor:default}
 .gantt-milestone-row .gbar:active{cursor:default}
+.gbar.milestone .gbar-more{color:var(--c-milestone)}
+.gbar.milestone .gbar-more:hover{background:rgba(0,0,0,0.08)}
 
 .milestone-strip{position:relative}
 .milestone-strip .ms{position:relative}
