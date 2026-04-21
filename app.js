@@ -62,15 +62,21 @@
       const bars = ganttBarsState
         .filter(b => b.TrackId === track.TrackId && !b.Hidden)
         .slice()
-        .sort((a,b) => Number(a.Start) - Number(b.Start));
-      // Interval-pack: each bar gets a lane (grid-row) so overlaps stack vertically.
-      const laneEnds = []; // laneEnds[i] = end quarter of last bar on lane i
+        // Stable ordering by BarId (creation time) — NOT by Start.
+        // Sorting by Start would cause bars to swap lanes on drag; this keeps
+        // each bar's lane stable so dragging moves only that bar.
+        .sort((a,b) => String(a.BarId).localeCompare(String(b.BarId)));
+      // Pack into lanes: per-lane list of { start, end } ranges. A bar takes
+      // the lowest-index lane where it doesn't overlap any existing range.
+      const laneRanges = []; // laneRanges[i] = array of {s, e}
       const laneByBar = {};
       bars.forEach(b => {
         const s = Number(b.Start), en = Number(b.End);
-        let lane = laneEnds.findIndex(end => end <= s);
-        if(lane < 0){ lane = laneEnds.length; laneEnds.push(en); }
-        else { laneEnds[lane] = en; }
+        let lane = laneRanges.findIndex(ranges =>
+          ranges.every(r => en <= r.s || s >= r.e)
+        );
+        if(lane < 0){ lane = laneRanges.length; laneRanges.push([{s, e: en}]); }
+        else { laneRanges[lane].push({s, e: en}); }
         laneByBar[b.BarId] = lane;
       });
       const laneCount = Math.max(1, laneEnds.length);
