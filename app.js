@@ -1109,10 +1109,10 @@
   function mountSectionAddButtons(){
     const canEdit = !!userName;
     const mounts = [
-      { id:'add-character-btn', label:'＋ Character', onClick:() => openCharacterModal(null) },
-      { id:'add-item-btn',      label:'＋ Item',      onClick:() => openItemModal(null) },
-      { id:'add-map-btn',       label:'＋ Map',       onClick:() => openMapModal(null) },
-      { id:'add-system-btn',    label:'＋ System',    onClick:() => openSystemModal(null) },
+      { id:'add-character-btn', label:'+ Character', onClick:() => openCharacterModal(null) },
+      { id:'add-item-btn',      label:'+ Item',      onClick:() => openItemModal(null) },
+      { id:'add-map-btn',       label:'+ Map',       onClick:() => openMapModal(null) },
+      { id:'add-system-btn',    label:'+ System',    onClick:() => openSystemModal(null) },
     ];
     mounts.forEach(m => {
       const host = qs('#' + m.id);
