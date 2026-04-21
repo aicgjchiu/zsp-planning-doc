@@ -270,13 +270,6 @@
     { v:'env',        label:'Environment & Concept' },
     { v:'vfx',        label:'VFX & Rigging' },
   ];
-  const SEED_TEAM = [
-    { MemberId:'jeff',     Name:'Jeff',     RoleKey:'programmer', RoleLabel:'Programmer',            Order:1, Active:true },
-    { MemberId:'christie', Name:'Christie', RoleKey:'char',       RoleLabel:'Character Artist',      Order:2, Active:true },
-    { MemberId:'tachi',    Name:'Tachi',    RoleKey:'env',        RoleLabel:'Environment & Concept', Order:3, Active:true },
-    { MemberId:'jason',    Name:'Jason',    RoleKey:'vfx',        RoleLabel:'VFX & Rigging',         Order:4, Active:true },
-  ];
-  const LEGACY_COL_TO_MEMBER = { programmer:'jeff', char:'christie', env:'tachi', vfx:'jason' };
   const USER_KEY = 'zsp_user_name';
   const TAB_FILTER_KEY_CURRENT = 'zsp_phase_filter';
 
@@ -297,10 +290,6 @@
 
   function genId(prefix){
     return `${prefix}-${Date.now()}-${Math.floor(Math.random()*1e6).toString(36)}`;
-  }
-  function legacyTaskId(colKey, t, idx){
-    const slug = (t.title||'').replace(/[^a-z0-9]+/gi,'-').toLowerCase().slice(0,40);
-    return `${colKey}-p${t.phase}-${t.p}-${slug}-${idx}`;
   }
   function getUserName(){
     if(userName) return userName;
@@ -331,7 +320,7 @@
         charactersState.length === 0 || itemsState.length === 0 ||
         mapsState.length === 0 || systemsState.length === 0;
       if(anyEmpty){
-        await bootstrapIfEmpty();
+        console.warn('[zsp] One or more sheet tabs are empty. Populate Tasks/Team/Characters/Items/Maps/Systems in the Google Sheet.');
       }
       renderBoard();
       renderCharacters();
@@ -541,133 +530,6 @@
       let u = '';
       try{ u = localStorage.getItem(USER_KEY) || ''; }catch(e){}
       whoEl.textContent = u ? `signed in as ${u}` : 'not identified';
-    }
-  }
-
-  async function bootstrapIfEmpty(){
-    const body = { Action: 'bootstrap' };
-
-    if (taskState.length === 0 || teamState.length === 0) {
-      const seedTasks = [];
-      const src = window.TASKS || {};
-      Object.keys(src).forEach(colKey => {
-        const memberId = LEGACY_COL_TO_MEMBER[colKey];
-        if(!memberId) return;
-        (src[colKey] || []).forEach((t, idx) => {
-          seedTasks.push({
-            TaskId:    legacyTaskId(colKey, t, idx),
-            MemberId:  memberId,
-            Title:     t.title || '',
-            Body:      t.body  || '',
-            Phase:     t.phase || 1,
-            Priority:  t.p     || 'P1',
-            Status:    'todo',
-            Notes:     '',
-            Assignee:  '',
-            Hidden:    false,
-            SortOrder: (idx + 1) * 1000,
-            CreatedAt: '',
-            UpdatedAt: '',
-            UpdatedBy: '',
-          });
-        });
-      });
-      if (taskState.length === 0) body.Tasks = seedTasks;
-      if (teamState.length === 0) body.Team  = SEED_TEAM;
-    }
-
-    if (charactersState.length === 0 && Array.isArray(window.CHARACTERS)) {
-      body.Characters = window.CHARACTERS.map((c, idx) => ({
-        Id:            c.id || `char-seed-${idx}`,
-        Name:          c.name || '',
-        Culture:       c.culture || '',
-        RoleText:      c.role || '',
-        Weapon:        c.weapon || '',
-        Status:        c.status || '',
-        StatusChip:    c.statusChip || '',
-        Summary:       c.summary || '',
-        AbilitiesJson: JSON.stringify(Array.isArray(c.abilities) ? c.abilities : []),
-        Hidden:        false,
-        SortOrder:     (idx + 1) * 1000,
-        CreatedAt:     '',
-        UpdatedAt:     '',
-        UpdatedBy:     '',
-      }));
-    }
-
-    if (itemsState.length === 0 && Array.isArray(window.ITEMS)) {
-      body.Items = window.ITEMS.map((it, idx) => ({
-        Id:        it.id || `item-seed-${idx}`,
-        Name:      it.name || '',
-        Kind:      it.kind || '',
-        Effect:    it.effect || '',
-        Stack:     Number(it.stack) || 0,
-        Existing:  !!it.existing,
-        Notes:     it.notes || '',
-        Hidden:    false,
-        SortOrder: (idx + 1) * 1000,
-        CreatedAt: '',
-        UpdatedAt: '',
-        UpdatedBy: '',
-      }));
-    }
-
-    if (mapsState.length === 0 && Array.isArray(window.MAPS)) {
-      body.Maps = window.MAPS.map((m, idx) => ({
-        Id:         m.id || `map-seed-${idx}`,
-        Name:       m.name || '',
-        Theme:      m.theme || '',
-        Size:       m.size || '',
-        Enemies:    m.enemies || '',
-        Boss:       m.boss || '',
-        Difficulty: m.difficulty || 'Run 2',
-        BiomeNotes: m.biomeNotes || '',
-        Hidden:     false,
-        SortOrder:  (idx + 1) * 1000,
-        CreatedAt:  '',
-        UpdatedAt:  '',
-        UpdatedBy:  '',
-      }));
-    }
-
-    if (systemsState.length === 0 && Array.isArray(window.SYSTEMS)) {
-      body.Systems = window.SYSTEMS.map((s, idx) => ({
-        Id:        s.id || `sys-seed-${idx}`,
-        System:    s.sys || '',
-        SysStatus: s.status || 'Design',
-        Dep:       s.dep || '',
-        Owner:     s.owner || '',
-        Notes:     s.notes || '',
-        Hidden:    false,
-        SortOrder: (idx + 1) * 1000,
-        CreatedAt: '',
-        UpdatedAt: '',
-        UpdatedBy: '',
-      }));
-    }
-
-    // If nothing to seed, nothing to do.
-    if (!body.Tasks && !body.Team && !body.Characters && !body.Items && !body.Maps && !body.Systems) return;
-
-    try{
-      const res = await fetch(SHEET_ENDPOINT, {
-        method: 'POST',
-        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-        body: JSON.stringify(body),
-      });
-      const json = await res.json();
-      if(!json.ok) throw new Error(json.error || 'bootstrap failed');
-      // Re-fetch so state reflects seeded rows.
-      const r2 = await fetch(SHEET_ENDPOINT, { method:'GET' });
-      const j2 = await r2.json();
-      taskState       = (j2.tasks      || []).map(normalizeTaskRow);
-      teamState       = (j2.team       || []).map(normalizeTeamRow);
-      charactersState = (j2.characters || []).map(normalizeCharacterRow);
-      itemsState      = (j2.items      || []).map(normalizeItemRow);
-      mapsState       = (j2.maps       || []).map(normalizeMapRow);
-      systemsState    = (j2.systems    || []).map(normalizeSystemRow);
-    }catch(err){
-      console.warn('[bootstrap] error:', err);
     }
   }
 

@@ -24,11 +24,11 @@ This doc is **separate from the ZSP game codebase itself** (that lives in a Perf
 |---|---|
 | `index.html` | Shell. 4 tabs: Overview, Roadmap, Design Doc, Task Board. All tab content lives inline. |
 | `styles.css` | All styles. Uses CSS custom props in `:root` for the color system (oklch). |
-| `data.js` | **Single source of truth for all content.** Characters, abilities, items, maps, systems, Gantt bars, milestones, phases, tasks — all live here as `window.*` globals. |
+| `data.js` | Roadmap-only content as `window.*` globals: `GANTT`, `PHASES`, `MILESTONES`. Everything else (tasks, characters, items, maps, systems) is sourced live from the Google Sheet. |
 | `app.js` | Rendering + tab switching + task-board sync logic. No frameworks; hand-rolled template strings. |
 | `CLAUDE.md` | This file. |
 
-When content needs to change (add a map, reword a task, shift a Gantt bar), edit `data.js` only. `app.js` just reads globals and renders.
+To shift a Gantt bar / reword a phase goal / retime a milestone, edit `data.js`. To change a task, character, item, map, or system, use the in-page UI (the sheet is the source of truth).
 
 ## Architecture
 
@@ -60,11 +60,11 @@ Live-synced task board backed by a Google Sheet via an Apps Script web app. **Th
 
 ### Task IDs
 
-- **Seeded tasks** (from the one-time `window.TASKS` migration) use a deterministic legacy ID: `${legacyColKey}-p${phase}-${priority}-${slug}-${idx}`. This keeps any pre-existing sheet rows aligned during the migration.
+- **Legacy seeded tasks** (from the one-time migration) use a deterministic legacy ID: `${legacyColKey}-p${phase}-${priority}-${slug}-${idx}`. This format is preserved for historical rows; no new IDs in this shape are ever minted.
 - **New tasks** (created via the UI) get a client-generated ID: `task-<timestamp>-<random>`. Stable for the lifetime of the row.
 - `MemberId` links a task to a team member; `RoleKey` on the team member drives chip color.
 
-`window.TASKS` in `data.js` is the seed source, used only on first-ever load into an empty sheet. A follow-up PR removes `window.TASKS` entirely once migration is verified; the sheet is the sole source of truth after that.
+The sheet is the sole source of truth for tasks. The seed arrays have been removed from `data.js`; the client no longer has any fallback content for Tasks/Team/Characters/Items/Maps/Systems — if the sheet is wiped, it must be repopulated manually.
 
 ### Gantt
 
@@ -73,7 +73,7 @@ The Gantt is a CSS grid: a fixed 240px label column + 12 quarter columns of 120p
 ## Content Conventions
 
 - **Keep Chinese only in proper nouns** — map names (e.g. `NightMarket 夜市`), character names (`Daoshi 道士`), enemy names (`Jiangshi 殭屍`), boss names, ability names. Everything else (system descriptions, task bodies, tooltips, headers) is in English. This mirrors the reference Google Sheet.
-- **Target game content:** 4 maps · 4 characters · 3 abilities each · 10 items. These numbers are baked into the design doc; changing them means updating `window.CHARACTERS` / `window.ITEMS` / `window.MAPS` in lockstep with the Gantt + task board.
+- **Target game content:** 4 maps · 4 characters · 3 abilities each · 10 items. These numbers are baked into the design doc; changing them means editing the Characters / Items / Maps sheet tabs and keeping the Gantt + task board in sync.
 - **6-phase structure** (P1 Vertical Slice → P6 Ship) over 12 quarters / 3 years. Phase colors in CSS are `.phase-1` through `.phase-6` with matching `--c-*` variables.
 - **Team composition is hard-coded at 4:** 1 programmer (you) + 3 artists (character / environment / VFX-rigging). If team changes, multiple files need updating — search for role column keys (`programmer`, `char`, `env`, `vfx`).
 
@@ -125,11 +125,11 @@ Live URL: https://aicgjchiu.github.io/zsp-planning-doc/
 
 ## When Editing
 
-- **Change task content:** edit tasks from the Task Board tab UI (click `⋯` on a card) — this is the new source of truth. `window.TASKS` in `data.js` is seed-only and no longer read after first load; edits there have no effect on the live board.
+- **Change task content:** edit tasks from the Task Board tab UI (click `⋯` on a card) — this is the source of truth. `data.js` no longer contains task seed data.
 - **Team composition:** use the Task Board's "Team" button to add / rename / reorder / deactivate members. No code change needed when the team composition shifts.
-- **Change Design Doc content:** edit characters/items/maps/systems via the Design Doc tab UI (click `⋯` on any card or row, `＋` in a section header to add). The sheet is the source of truth. `window.CHARACTERS / ITEMS / MAPS / SYSTEMS` in `data.js` are seed-only, consumed once on first load; edits there have no effect on the live page after migration.
+- **Change Design Doc content:** edit characters/items/maps/systems via the Design Doc tab UI (click `⋯` on any card or row, `＋` in a section header to add). The sheet is the source of truth. `data.js` no longer contains Design Doc seed arrays.
 - **Character abilities:** exactly 3 slots per character, keyed `Q`/`R`/`T`, edited through the Character modal's sub-table. Stored as `JSON.stringify(abilities)` in the `AbilitiesJson` column of the Characters row. If a character ever needs a 4th ability, the schema tolerates it — only the modal UI enforces count-of-3 today.
-- **Add a character / map / item:** append to `window.CHARACTERS` / `window.MAPS` / `window.ITEMS`. Each has a shape defined by how `app.js::renderCharacters` etc. consume them — check the render functions to confirm required fields.
+- **Add a character / map / item:** use the ＋ button in the corresponding Design Doc section. Field shapes are defined by the sheet tab headers (Characters / Items / Maps) and consumed by `app.js::renderCharacters` etc.
 - **Shift a Gantt bar:** edit `window.GANTT` — `start` and `end` are quarter indices (0 = Y1Q1, 11 = Y3Q4). Keep `color` in sync with the `role` so the bar matches the row.
 - **Add a phase / lane color:** add a CSS variable in `:root`, then a matching `.chip.X` / `.dot.X` / `.gbar.X` rule. Phases use `.phase-1` through `.phase-6` with left-border color on task cards.
 - **New tab:** add a `<main class="page hidden" data-tab="newtab">` block in `index.html`, add a nav button with `data-target="newtab"`, write a `render*()` function in `app.js`, and call it from `renderAll()`.
