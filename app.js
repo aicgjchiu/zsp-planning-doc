@@ -156,6 +156,99 @@
     host.innerHTML = cards + `<button class="ms-add" id="milestone-add-btn" ${gateAttr || 'title="Add milestone"'}>＋</button>`;
   }
 
+  // --- Render: Quarter-by-quarter plan ---
+  function renderQuarterPlan(){
+    const host = qs('#quarter-plan');
+    if(!host) return;
+    const canEdit = !!userName;
+    const gateAttr = canEdit ? '' : 'disabled title="Set your name first"';
+    const totalYears = Math.max(1, Number(timelineState.TotalYears) || 3);
+
+    const byId = new Map(
+      quarterPlanState.filter(r => !r.Hidden).map(r => [r.QuarterId, r])
+    );
+
+    const placeholder = `<span class="dim small">—</span>`;
+    let html = `<table class="sheet">
+      <thead><tr>
+        <th style="width:70px">Quarter</th>
+        <th>Programmer — Code</th>
+        <th>Character Artist</th>
+        <th>Environment / Concept</th>
+        <th>VFX &amp; Rigging</th>
+        <th style="width:140px">End-of-quarter gate</th>
+        <th style="width:40px"></th>
+      </tr></thead><tbody>`;
+
+    for(let y = 1; y <= totalYears; y++) for(let q = 1; q <= 4; q++){
+      const quarterLabel = `Y${y} Q${q}`;
+      const qid = `qp-y${y}q${q}`;
+      const row = byId.get(qid);
+      const pendingClass = (row && row._pending) ? ' class="pending"' : '';
+      html += `<tr${pendingClass}>
+        <td class="mono">${quarterLabel}</td>
+        <td>${row && row.ProgrammerPlan ? escapeHtml(row.ProgrammerPlan) : placeholder}</td>
+        <td>${row && row.CharPlan       ? escapeHtml(row.CharPlan)       : placeholder}</td>
+        <td>${row && row.EnvPlan        ? escapeHtml(row.EnvPlan)        : placeholder}</td>
+        <td>${row && row.VfxPlan        ? escapeHtml(row.VfxPlan)        : placeholder}</td>
+        <td>${row && row.Gate           ? escapeHtml(row.Gate)           : placeholder}</td>
+        <td><button class="row-menu-btn" data-qp-id="${qid}" data-qp-label="${quarterLabel}" ${gateAttr || 'title="Edit this quarter"'}>⋯</button></td>
+      </tr>`;
+    }
+    html += `</tbody></table>`;
+    host.innerHTML = html;
+
+    qsa('.row-menu-btn', host).forEach(btn => {
+      btn.addEventListener('click', () => {
+        if(btn.disabled) return;
+        openQuarterPlanModal(btn.getAttribute('data-qp-id'), btn.getAttribute('data-qp-label'));
+      });
+    });
+  }
+
+  function openQuarterPlanModal(qid, quarterLabel){
+    const existing = quarterPlanState.find(r => r.QuarterId === qid);
+    const row = existing || {
+      QuarterId: qid, Quarter: quarterLabel,
+      ProgrammerPlan: '', CharPlan: '', EnvPlan: '', VfxPlan: '', Gate: '',
+    };
+
+    const html = `
+      <div class="modal-panel" data-panel style="max-width:680px">
+        <h3>${escapeHtml(quarterLabel)} — plan</h3>
+        <label>Programmer — Code <textarea id="qp-prog" rows="3">${escapeHtml(row.ProgrammerPlan || '')}</textarea></label>
+        <label>Character Artist <textarea id="qp-char" rows="3">${escapeHtml(row.CharPlan || '')}</textarea></label>
+        <label>Environment / Concept <textarea id="qp-env" rows="3">${escapeHtml(row.EnvPlan || '')}</textarea></label>
+        <label>VFX &amp; Rigging <textarea id="qp-vfx" rows="3">${escapeHtml(row.VfxPlan || '')}</textarea></label>
+        <label>End-of-quarter gate <textarea id="qp-gate" rows="2">${escapeHtml(row.Gate || '')}</textarea></label>
+        <div class="modal-footer">
+          <div class="right">
+            <button class="modal-btn" data-action="cancel">Cancel</button>
+            <button class="modal-btn primary" data-action="save">Save</button>
+          </div>
+        </div>
+      </div>
+    `;
+    openModal(html, (root) => {
+      const panel = qs('[data-panel]', root);
+      qs('[data-action="cancel"]', panel).addEventListener('click', closeModal);
+      qs('[data-action="save"]', panel).addEventListener('click', () => {
+        const patch = {
+          Quarter:        quarterLabel,
+          ProgrammerPlan: qs('#qp-prog', panel).value,
+          CharPlan:       qs('#qp-char', panel).value,
+          EnvPlan:        qs('#qp-env',  panel).value,
+          VfxPlan:        qs('#qp-vfx',  panel).value,
+          Gate:           qs('#qp-gate', panel).value,
+        };
+        closeModal();
+        const p = pushRow('QuarterPlan', qid, patch);
+        renderQuarterPlan();
+        p.then(fetchIfIdle);
+      });
+    });
+  }
+
   // --- Render: Phases table ---
   function renderPhases(){
     const host = qs('#phases-table tbody');
@@ -425,6 +518,7 @@
       renderSystems();
       renderGantt();
       renderMilestones();
+      renderQuarterPlan();
       if(!userName){
         const n = (prompt('Enter your name — shown on tasks you create or update. You can change it later.') || '').trim();
         if(n){
@@ -992,6 +1086,7 @@
   function renderAll(){
     renderGantt();
     renderMilestones();
+    renderQuarterPlan();
     renderPhases();
     renderCharacters();
     renderItems();
