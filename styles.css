@@ -108,6 +108,9 @@ table.sheet td.mono, table.sheet th.mono, .mono-cell{font-family:var(--mono);fon
 table.sheet td.num{font-family:var(--mono);text-align:right}
 table.sheet td.dim{color:var(--ink-3)}
 
+/* Ultimate ability — a slot set apart from the Q/R/T skill slots */
+table.sheet tr.ult-row td{border-top:2px solid var(--line-2)}
+
 /* ---- chips / badges ---- */
 .chip{
   display:inline-flex;align-items:center;gap:6px;
@@ -451,7 +454,7 @@ html.zsp-locked body > *:not(#zsp-lock-gate) { display: none !important; }
 .abilities-subtable { width: 100%; border-collapse: collapse; font-size: 12px; }
 .abilities-subtable th, .abilities-subtable td { padding: 4px 6px; vertical-align: top; border-bottom: 1px solid var(--line); }
 .abilities-subtable th { text-align: left; font-weight: 600; color: var(--ink-3); font-family: var(--mono); font-size: 10.5px; letter-spacing: 0.08em; text-transform: uppercase; }
-.abilities-subtable td.key-cell { font-family: var(--mono); font-weight: 600; text-align: center; width: 28px; color: var(--ink); }
+.abilities-subtable td.key-cell { font-family: var(--mono); font-weight: 600; text-align: center; width: 36px; color: var(--ink); }
 .abilities-subtable input[type=text], .abilities-subtable select, .abilities-subtable textarea {
   width: 100%; box-sizing: border-box; font: inherit;
   padding: 3px 5px; border: 1px solid var(--line); border-radius: 4px; background: #fff; color: var(--ink);

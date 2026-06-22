@@ -279,7 +279,7 @@
         ? `<span class="chip char dot">${escapeHtml(c.StatusChip)}</span>`
         : `<span class="chip">${escapeHtml(c.StatusChip)}</span>`;
       const abilitiesRows = (c.abilities || []).map(a => `
-        <tr>
+        <tr class="${a.key === 'Ult' ? 'ult-row' : ''}">
           <td class="mono" style="font-weight:600">${escapeHtml(a.key || '')}</td>
           <td><b>${escapeHtml(a.name || '')}</b></td>
           <td class="dim">${escapeHtml(a.type || '')}</td>
@@ -421,7 +421,7 @@
     { v:'P1', label:'P1 — Should have' },
     { v:'P2', label:'P2 — Nice to have' },
   ];
-  const ABILITY_KEYS = ['Q', 'R', 'T']; // fixed slot count per design
+  const ABILITY_KEYS = ['Q', 'R', 'T', 'Ult']; // 3 skill slots + 1 dedicated Ultimate slot
   const ABILITY_TYPES = [
     { v:'Skill',    label:'Skill' },
     { v:'Ultimate', label:'Ultimate' },
@@ -1876,7 +1876,7 @@
       return {
         key:  k,
         name: existing.name || '',
-        type: existing.type || 'Skill',
+        type: existing.type || (k === 'Ult' ? 'Ultimate' : 'Skill'),
         desc: existing.desc || '',
         impl: existing.impl || 'Design only',
       };
@@ -1913,7 +1913,7 @@
         </div>
         <label>Summary<textarea data-f="Summary">${escapeHtml(c.Summary)}</textarea></label>
         <div>
-          <div class="label" style="margin-top:6px">Abilities (Q / R / T — exactly 3 slots)</div>
+          <div class="label" style="margin-top:6px">Abilities (Q / R / T skills + Ultimate)</div>
           <table class="abilities-subtable" data-abilities>
             <thead><tr><th>Key</th><th>Name</th><th style="width:90px">Type</th><th>Description</th><th style="width:110px">Impl</th></tr></thead>
             <tbody>${abDraft.map(abilityRowHtml).join('')}</tbody>
