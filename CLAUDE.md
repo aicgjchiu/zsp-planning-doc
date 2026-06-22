@@ -45,7 +45,7 @@ Live-synced task board backed by a Google Sheet via an Apps Script web app. **Th
 - **Tabs:**
   - **`Tasks`** headers (row 1, in order): `TaskId | MemberId | Title | Body | Phase | Priority | Status | Notes | Assignee | Hidden | SortOrder | CreatedAt | UpdatedAt | UpdatedBy`
   - **`Team`** headers: `MemberId | Name | RoleKey | RoleLabel | Order | Active`
-  - **`Characters`** headers: `Id | Name | Culture | RoleText | Weapon | Status | StatusChip | Summary | AbilitiesJson | Hidden | SortOrder | CreatedAt | UpdatedAt | UpdatedBy`  — `AbilitiesJson` is a JSON-serialized array of `{key, name, type, desc, impl}`, exactly 3 slots keyed `Q`/`R`/`T`
+  - **`Characters`** headers: `Id | Name | Culture | RoleText | Weapon | Status | StatusChip | Summary | AbilitiesJson | Hidden | SortOrder | CreatedAt | UpdatedAt | UpdatedBy`  — `AbilitiesJson` is a JSON-serialized array of `{key, name, type, desc, impl}` — 3 skill slots keyed `Q`/`R`/`T` plus a dedicated Ultimate slot keyed `Ult` (4 total)
   - **`Items`** headers: `Id | Name | Kind | Effect | Stack | Existing | Notes | Hidden | SortOrder | CreatedAt | UpdatedAt | UpdatedBy`
   - **`Maps`** headers: `Id | Name | Theme | Size | Enemies | Boss | Difficulty | BiomeNotes | Hidden | SortOrder | CreatedAt | UpdatedAt | UpdatedBy`
   - **`Systems`** headers: `Id | System | SysStatus | Dep | Owner | Notes | Hidden | SortOrder | CreatedAt | UpdatedAt | UpdatedBy`
@@ -63,6 +63,30 @@ Live-synced task board backed by a Google Sheet via an Apps Script web app. **Th
 - **Identity:** user's name is prompted on page load (via `DOMContentLoaded` → post-fetch prompt in `fetchAll`) and stored in `localStorage` under `zsp_user_name`. Stamped on every write as `UpdatedBy`. Add/Edit/Delete/Team buttons are disabled until identity is set; status/notes inline edits still work without it.
 - **Soft delete only:** setting `Hidden=TRUE` filters a task from the UI. Row stays in the sheet and can be recovered by flipping the flag manually.
 
+### Writing to the sheet from the command line (curl)
+
+The working recipe — use this exactly, don't re-derive it:
+
+```bash
+ENDPOINT='https://script.google.com/macros/s/AKfycbypjQj-_CrxjEovmHt5vzc0Iaysbwt3n0MglkG7MAsDMJII8B8YCqFOBM6eE4GKAFuc/exec'
+
+# 1. Write the JSON body to a file (NOT a heredoc piped into curl's stdin)
+cat > /tmp/payload.json <<'EOF'
+{"Tab":"Milestones","Key":"ms-xxx","Fields":{"Quarter":"Y2 Q1","Name":"..."},"UpdatedBy":"Jeff"}
+EOF
+
+# 2. POST with --data-binary @file, -L to follow redirect, no -X POST
+curl -sL -H 'Content-Type: text/plain;charset=utf-8' --data-binary @/tmp/payload.json "$ENDPOINT"
+# → {"ok":true}
+```
+
+**Two non-obvious traps that cost an hour the first time:**
+
+1. **Do NOT pipe the JSON body via stdin** (heredoc → curl `--data-binary @-`). Google's frontend strips Content-Length on the 302 redirect, returns `411 Length Required`. Write the JSON to a temp file and pass `--data-binary @/path/to/file` instead. A file gives curl a deterministic length it can re-send after the redirect.
+2. **Do NOT pass `-X POST` when using `-L`.** Apps Script processes the POST body on the initial request, then 302-redirects to a `script.googleusercontent.com/macros/echo?...` URL that expects a **GET** to retrieve the response payload. curl's default behavior on 302 is POST→GET, which is exactly what you want. `-X POST` overrides that, forces POST through the redirect, and you get the generic "Sorry, unable to open the file at this time" Drive error page instead of the JSON response. Leave the method implicit.
+
+For batches of writes, loop over files sequentially — the script is fast enough that parallelism isn't needed, and sequential gives clean per-row status output.
+
 ### Task IDs
 
 - **Legacy seeded tasks** (from the one-time migration) use a deterministic legacy ID: `${legacyColKey}-p${phase}-${priority}-${slug}-${idx}`. This format is preserved for historical rows; no new IDs in this shape are ever minted.
@@ -78,7 +102,7 @@ The Gantt is a CSS grid: a fixed 240px label column + N quarter columns of 120px
 ## Content Conventions
 
 - **Keep Chinese only in proper nouns** — map names (e.g. `NightMarket 夜市`), character names (`Daoshi 道士`), enemy names (`Jiangshi 殭屍`), boss names, ability names. Everything else (system descriptions, task bodies, tooltips, headers) is in English. This mirrors the reference Google Sheet.
-- **Target game content:** 4 maps · 4 characters · 3 abilities each · 10 items. These numbers are baked into the design doc; changing them means editing the Characters / Items / Maps sheet tabs and keeping the Gantt + task board in sync.
+- **Target game content:** 4 maps · 4 characters · 3 skills + 1 ultimate each · 10 items. These numbers are baked into the design doc; changing them means editing the Characters / Items / Maps sheet tabs and keeping the Gantt + task board in sync.
 - **6-phase structure** (P1 Vertical Slice → P6 Ship) over 12 quarters / 3 years. Phase colors in CSS are `.phase-1` through `.phase-6` with matching `--c-*` variables.
 - **Team composition is hard-coded at 4:** 1 programmer (you) + 3 artists (character / environment / VFX-rigging). If team changes, multiple files need updating — search for role column keys (`programmer`, `char`, `env`, `vfx`).
 
@@ -134,7 +158,7 @@ Live URL: https://aicgjchiu.github.io/zsp-planning-doc/
 - **Change task content:** edit tasks from the Task Board tab UI (click `⋯` on a card) — the sheet is the source of truth.
 - **Team composition:** use the Task Board's "Team" button to add / rename / reorder / deactivate members. No code change needed when the team composition shifts.
 - **Change Design Doc content:** edit characters/items/maps/systems via the Design Doc tab UI (click `⋯` on any card or row, `＋` in a section header to add). The sheet is the source of truth.
-- **Character abilities:** exactly 3 slots per character, keyed `Q`/`R`/`T`, edited through the Character modal's sub-table. Stored as `JSON.stringify(abilities)` in the `AbilitiesJson` column of the Characters row. If a character ever needs a 4th ability, the schema tolerates it — only the modal UI enforces count-of-3 today.
+- **Character abilities:** 4 fixed slots per character — 3 skill slots keyed `Q`/`R`/`T` plus a dedicated Ultimate slot keyed `Ult` — edited through the Character modal's sub-table. Stored as `JSON.stringify(abilities)` in the `AbilitiesJson` column of the Characters row. The modal builds and saves exactly these 4 slots; the `Ult` row defaults to type `Ultimate`. An undesigned skill slot (e.g. a concept-only character's 3rd skill) carries a `TBD` placeholder.
 - **Add a character / map / item:** use the ＋ button in the corresponding Design Doc section. Field shapes are defined by the sheet tab headers (Characters / Items / Maps) and consumed by `app.js::renderCharacters` etc.
 - **Change a Gantt track or bar:** edit from the Roadmap tab UI. The "Tracks" button in the Roadmap header opens a modal for rename/role/reorder/delete/add. On the Gantt itself, `⋯` on a bar opens its edit modal (name/color/quarters/delete); drag a bar to move or resize (first/last 8px = resize, middle = move); `＋` at the end of each track row adds a new bar. The sheet is the source of truth.
 - **Change a milestone:** edit from the Roadmap tab UI. `⋯` on a milestone card opens its modal (quarter/name/goal/delete); `＋` at the end of the Milestones strip adds one. The Gantt's bottom "Milestones" row is auto-derived — read-only, no drag or `⋯`.
