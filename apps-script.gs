@@ -84,6 +84,7 @@ function handleEnsureTabs() {
     let sheet = ss.getSheetByName(name);
     const isNew = !sheet;
     if (isNew) sheet = ss.insertSheet(name, ss.getNumSheets());
+    if (isNew) sheet.getRange(1, 1, sheet.getMaxRows(), specs[name].length).setNumberFormat('@');
     if (sheet.getLastRow() === 0) sheet.getRange(1, 1, 1, specs[name].length).setValues([specs[name]]);
     created[name] = isNew;
   });
