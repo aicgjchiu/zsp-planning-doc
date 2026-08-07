@@ -417,6 +417,8 @@
   function renderGameplayBanner(){
     const host = qs('#gnb-banner');
     if(!host) return;
+    // Pre-fetch / unseeded state: render nothing rather than a scary diagnostic.
+    if(!gameplayState.length){ host.innerHTML = ''; return; }
     const MODEL_IDS = ['gp-find-portal','gp-portal-cd','gp-activate','gp-farm-rate','gp-farm-len','gp-boss-rate','gp-boss-len'];
     const val = id => {
       const row = gameplayState.find(g => g.Id === id && !g.Hidden);
@@ -431,7 +433,7 @@
       if(Number.isFinite(n)) v[id] = n; else missing.push(id);
     });
     if(missing.length){
-      host.innerHTML = `<div class="gnb"><div class="gnb-note">Run-length model missing: <code>${missing.map(escapeHtml).join(', ')}</code></div></div>`;
+      host.innerHTML = `<div class="gnb"><div class="gnb-note">Run-length model needs numeric values for: <code>${missing.map(escapeHtml).join(', ')}</code></div></div>`;
       return;
     }
     const floor    = Math.max(v['gp-find-portal'], v['gp-portal-cd']) + v['gp-activate'];
@@ -441,19 +443,21 @@
     const expected = floor + farmShare + bossShare;
     const max      = floor + v['gp-farm-len'] + v['gp-boss-len'];
     const mins = s => (s/60).toFixed(1);
+    const secs = x => +x.toFixed(1);
     const pct  = x => (x/expected*100).toFixed(1) + '%';
+    // Caption anchors mirror sheet rows: ≈35 min = gp-eportal-tier (300s × 7 tiers), 9:00 = gp-card-tier (540s) — update together.
     host.innerHTML = `
       <div class="gnb">
         <div class="gnb-headline">NightMarket segment: <b>${mins(min)}–${mins(max)} min</b> · expected <b>${mins(expected)} min</b></div>
         <div class="gnb-bar">
-          <span class="gnb-seg floor" style="width:${pct(floor)}" title="Portal floor ${floor}s"></span>
-          <span class="gnb-seg farm" style="width:${pct(farmShare)}" title="Farm share ${farmShare}s"></span>
-          <span class="gnb-seg boss" style="width:${pct(bossShare)}" title="Boss share ${bossShare}s"></span>
+          <span class="gnb-seg floor" style="width:${pct(floor)}" title="Portal floor ${secs(floor)}s"></span>
+          <span class="gnb-seg farm" style="width:${pct(farmShare)}" title="Farm share ${secs(farmShare)}s"></span>
+          <span class="gnb-seg boss" style="width:${pct(bossShare)}" title="Boss share ${secs(bossShare)}s"></span>
         </div>
         <div class="gnb-legend">
-          <span><span class="gnb-dot floor"></span>Portal floor ${floor}s</span>
-          <span><span class="gnb-dot farm"></span>Farm ${farmShare}s</span>
-          <span><span class="gnb-dot boss"></span>Boss ${bossShare}s</span>
+          <span><span class="gnb-dot floor"></span>Portal floor ${secs(floor)}s</span>
+          <span><span class="gnb-dot farm"></span>Farm ${secs(farmShare)}s</span>
+          <span><span class="gnb-dot boss"></span>Boss ${secs(bossShare)}s</span>
         </div>
         <div class="gnb-note">Model reflects the target portal-hop loop. As-built has no victory condition yet (loss only: player Portal destroyed / team wipe). As-built anchors: enemy Portal tops out ≈35 min; card tiers final at 9:00.</div>
       </div>`;
@@ -1996,8 +2000,8 @@
       { id:'add-item-btn',      tip:'Add item',      onClick:() => openItemModal(null) },
       { id:'add-map-btn',       tip:'Add map',       onClick:() => openMapModal(null) },
       { id:'add-system-btn',    tip:'Add system',    onClick:() => openSystemModal(null) },
-      { id:'add-gameplay-btn', tip:'Add parameter', onClick:() => openGameplayModal(null) },
-      { id:'add-enemy-btn',    tip:'Add enemy',     onClick:() => openEnemyModal(null) },
+      { id:'add-gameplay-btn',  tip:'Add parameter', onClick:() => openGameplayModal(null) },
+      { id:'add-enemy-btn',     tip:'Add enemy',     onClick:() => openEnemyModal(null) },
     ];
     mounts.forEach(m => {
       const host = qs('#' + m.id);
@@ -2251,6 +2255,7 @@
         closeModal();
         const p = pushRow('Maps', key, fields);
         renderMaps();
+        renderEnemies();
         p.then(fetchIfIdle);
       });
       if(!isNew){
@@ -2268,6 +2273,7 @@
             closeModal();
             const p = pushRow('Maps', m.Id, { Hidden: true });
             renderMaps();
+            renderEnemies();
             p.then(fetchIfIdle);
           });
         });
