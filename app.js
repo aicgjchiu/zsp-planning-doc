@@ -407,6 +407,146 @@
     });
   }
 
+  // --- Render: Gameplay & Numbers ---
+  function basisChip(basis){
+    return basis === 'as-built'
+      ? '<span class="chip asbuilt">as-built</span>'
+      : '<span class="chip target">target</span>';
+  }
+
+  function renderGameplayBanner(){
+    const host = qs('#gnb-banner');
+    if(!host) return;
+    const MODEL_IDS = ['gp-find-portal','gp-portal-cd','gp-activate','gp-farm-rate','gp-farm-len','gp-boss-rate','gp-boss-len'];
+    const val = id => {
+      const row = gameplayState.find(g => g.Id === id && !g.Hidden);
+      if(!row) return NaN;
+      const s = String(row.Value).trim();
+      return s === '' ? NaN : Number(s);
+    };
+    const v = {};
+    const missing = [];
+    MODEL_IDS.forEach(id => {
+      const n = val(id);
+      if(Number.isFinite(n)) v[id] = n; else missing.push(id);
+    });
+    if(missing.length){
+      host.innerHTML = `<div class="gnb"><div class="gnb-note">Run-length model missing: <code>${missing.map(escapeHtml).join(', ')}</code></div></div>`;
+      return;
+    }
+    const floor    = Math.max(v['gp-find-portal'], v['gp-portal-cd']) + v['gp-activate'];
+    const farmShare = v['gp-farm-rate'] * v['gp-farm-len'];
+    const bossShare = v['gp-boss-rate'] * v['gp-boss-len'];
+    const min      = floor;
+    const expected = floor + farmShare + bossShare;
+    const max      = floor + v['gp-farm-len'] + v['gp-boss-len'];
+    const mins = s => (s/60).toFixed(1);
+    const pct  = x => (x/expected*100).toFixed(1) + '%';
+    host.innerHTML = `
+      <div class="gnb">
+        <div class="gnb-headline">NightMarket segment: <b>${mins(min)}–${mins(max)} min</b> · expected <b>${mins(expected)} min</b></div>
+        <div class="gnb-bar">
+          <span class="gnb-seg floor" style="width:${pct(floor)}" title="Portal floor ${floor}s"></span>
+          <span class="gnb-seg farm" style="width:${pct(farmShare)}" title="Farm share ${farmShare}s"></span>
+          <span class="gnb-seg boss" style="width:${pct(bossShare)}" title="Boss share ${bossShare}s"></span>
+        </div>
+        <div class="gnb-legend">
+          <span><span class="gnb-dot floor"></span>Portal floor ${floor}s</span>
+          <span><span class="gnb-dot farm"></span>Farm ${farmShare}s</span>
+          <span><span class="gnb-dot boss"></span>Boss ${bossShare}s</span>
+        </div>
+        <div class="gnb-note">Model reflects the target portal-hop loop. As-built has no victory condition yet (loss only: player Portal destroyed / team wipe). As-built anchors: enemy Portal tops out ≈35 min; card tiers final at 9:00.</div>
+      </div>`;
+  }
+
+  function renderGameplay(){
+    renderGameplayBanner();
+    const host = qs('#gameplay-table tbody');
+    if(!host) return;
+    const canEdit = !!userName;
+    const rows = gameplayState
+      .filter(g => !g.Hidden)
+      .slice()
+      .sort((a,b) => a.SortOrder - b.SortOrder);
+    const html = [];
+    const emit = g => html.push(`
+      <tr class="${g._pending ? 'pending' : ''}">
+        <td><b>${escapeHtml(g.Name)}</b></td>
+        <td class="num mono-cell">${escapeHtml(g.Value)}</td>
+        <td class="dim">${escapeHtml(g.Unit)}</td>
+        <td>${basisChip(g.Basis)}</td>
+        <td class="dim">${escapeHtml(g.Notes)} <button class="row-menu-btn" data-gp-id="${escapeAttr(g.Id)}" ${canEdit?'':'disabled title="Set your name first"'}>⋯</button></td>
+      </tr>`);
+    GP_SECTIONS.forEach(sec => {
+      const group = rows.filter(g => g.Section === sec.v);
+      if(!group.length) return;
+      html.push(`<tr class="group-row"><td colspan="5">${escapeHtml(sec.label)}</td></tr>`);
+      group.forEach(emit);
+    });
+    const known = new Set(GP_SECTIONS.map(s => s.v));
+    const other = rows.filter(g => !known.has(g.Section));
+    if(other.length){
+      html.push('<tr class="group-row"><td colspan="5">Other</td></tr>');
+      other.forEach(emit);
+    }
+    host.innerHTML = html.join('');
+    qsa('.row-menu-btn', host).forEach(btn => {
+      btn.addEventListener('click', () => {
+        if(btn.disabled) return;
+        openGameplayModal(btn.getAttribute('data-gp-id'));
+      });
+    });
+  }
+
+  function renderEnemies(){
+    const host = qs('#enemies-table tbody');
+    if(!host) return;
+    const canEdit = !!userName;
+    const rows = enemiesState
+      .filter(x => !x.Hidden)
+      .slice()
+      .sort((a,b) => a.SortOrder - b.SortOrder);
+    const maps = mapsState
+      .filter(m => !m.Hidden)
+      .slice()
+      .sort((a,b) => a.SortOrder - b.SortOrder);
+    const html = [];
+    const emit = en => html.push(`
+      <tr class="${en.Tier === 'boss' ? 'boss-row ' : ''}${en._pending ? 'pending' : ''}">
+        <td><b>${escapeHtml(en.Name)}</b></td>
+        <td class="dim">${escapeHtml(labelOf(ENEMY_TIERS, en.Tier))}</td>
+        <td class="num">${escapeHtml(en.HP)}</td>
+        <td>${escapeHtml(en.Damage)}</td>
+        <td class="num">${escapeHtml(en.MoveSpeed)}</td>
+        <td class="num">${escapeHtml(en.SpawnWeight) || '—'}</td>
+        <td>${basisChip(en.Basis)}</td>
+        <td class="dim">${escapeHtml(en.Behavior)} <button class="row-menu-btn" data-enemy-id="${escapeAttr(en.Id)}" ${canEdit?'':'disabled title="Set your name first"'}>⋯</button></td>
+      </tr>`);
+    maps.forEach(m => {
+      const group = rows.filter(en => en.Map === m.Id);
+      if(!group.length) return;
+      html.push(`<tr class="group-row"><td colspan="8">${escapeHtml(m.Name)}</td></tr>`);
+      group.forEach(emit);
+    });
+    const mapIds = new Set(maps.map(m => m.Id));
+    const orphans = rows.filter(en => !mapIds.has(en.Map));
+    if(orphans.length){
+      html.push('<tr class="group-row"><td colspan="8">Unassigned map</td></tr>');
+      orphans.forEach(emit);
+    }
+    host.innerHTML = html.join('');
+    qsa('.row-menu-btn', host).forEach(btn => {
+      btn.addEventListener('click', () => {
+        if(btn.disabled) return;
+        openEnemyModal(btn.getAttribute('data-enemy-id'));
+      });
+    });
+  }
+
+  // Replaced with real implementations in the modals task
+  function openGameplayModal(id){ alert('Gameplay modal not built yet.'); }
+  function openEnemyModal(id){ alert('Enemy modal not built yet.'); }
+
   // --- Task Board · Google Sheets backed ---
   const SHEET_ENDPOINT = 'https://script.google.com/macros/s/AKfycbypjQj-_CrxjEovmHt5vzc0Iaysbwt3n0MglkG7MAsDMJII8B8YCqFOBM6eE4GKAFuc/exec';
   const POLL_MS = 30000;
@@ -534,6 +674,8 @@
       renderItems();
       renderMaps();
       renderSystems();
+      renderGameplay();
+      renderEnemies();
       renderGantt();
       renderMilestones();
       renderQuarterPlan();
@@ -1091,6 +1233,8 @@
     renderItems();
     renderMaps();
     renderSystems();
+    renderGameplay();
+    renderEnemies();
     mountSectionAddButtons();
     renderBoard();
     renderLegend();
@@ -1852,6 +1996,8 @@
       { id:'add-item-btn',      tip:'Add item',      onClick:() => openItemModal(null) },
       { id:'add-map-btn',       tip:'Add map',       onClick:() => openMapModal(null) },
       { id:'add-system-btn',    tip:'Add system',    onClick:() => openSystemModal(null) },
+      { id:'add-gameplay-btn', tip:'Add parameter', onClick:() => openGameplayModal(null) },
+      { id:'add-enemy-btn',    tip:'Add enemy',     onClick:() => openEnemyModal(null) },
     ];
     mounts.forEach(m => {
       const host = qs('#' + m.id);
