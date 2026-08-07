@@ -2088,6 +2088,10 @@
     if(!g){ alert('Parameter not found.'); return; }
 
     const secOpts   = GP_SECTIONS.map(o => `<option value="${o.v}" ${g.Section===o.v?'selected':''}>${escapeHtml(o.label)}</option>`).join('');
+    const secKnown = GP_SECTIONS.some(o => o.v === g.Section);
+    const secOrphan = !secKnown
+      ? `<option value="${escapeAttr(g.Section)}" selected>${escapeHtml(g.Section)} (custom)</option>`
+      : '';
     const basisOpts = BASIS_VALUES.map(o => `<option value="${o.v}" ${g.Basis===o.v?'selected':''}>${escapeHtml(o.label)}</option>`).join('');
 
     const html = `
@@ -2095,7 +2099,7 @@
         <h3>${isNew?'Add Parameter':'Edit Parameter'}</h3>
         <label>Name<input type="text" data-f="Name" value="${escapeAttr(g.Name)}" placeholder="e.g. Portal hop cooldown"></label>
         <div class="modal-row">
-          <label>Section<select data-f="Section">${secOpts}</select></label>
+          <label>Section<select data-f="Section">${secOrphan}${secOpts}</select></label>
           <label>Basis<select data-f="Basis">${basisOpts}</select></label>
         </div>
         <div class="modal-row">
@@ -2157,16 +2161,21 @@
 
   function openEnemyModal(id){
     const isNew = !id;
+    const visMaps = mapsState
+      .filter(m => !m.Hidden)
+      .slice()
+      .sort((a,b) => a.SortOrder - b.SortOrder);
     const en = isNew
-      ? { Id:'', Name:'', Map:(mapsState[0] && mapsState[0].Id) || '', Tier:'trash', HP:'', Damage:'', MoveSpeed:'', SpawnWeight:'', Behavior:'', Basis:'target', Hidden:false, SortOrder:0 }
+      ? { Id:'', Name:'', Map:(visMaps[0] && visMaps[0].Id) || '', Tier:'trash', HP:'', Damage:'', MoveSpeed:'', SpawnWeight:'', Behavior:'', Basis:'target', Hidden:false, SortOrder:0 }
       : enemiesState.find(x => x.Id === id);
     if(!en){ alert('Enemy not found.'); return; }
 
-    const mapOpts = mapsState
-      .filter(m => !m.Hidden)
-      .slice()
-      .sort((a,b) => a.SortOrder - b.SortOrder)
+    const mapOpts = visMaps
       .map(m => `<option value="${escapeAttr(m.Id)}" ${en.Map===m.Id?'selected':''}>${escapeHtml(m.Name)}</option>`).join('');
+    const mapKnown = visMaps.some(m => m.Id === en.Map);
+    const orphanOpt = !mapKnown
+      ? `<option value="${escapeAttr(en.Map)}" selected>${en.Map ? escapeHtml(en.Map)+' (missing map)' : '— unassigned —'}</option>`
+      : '';
     const tierOpts  = ENEMY_TIERS.map(o => `<option value="${o.v}" ${en.Tier===o.v?'selected':''}>${escapeHtml(o.label)}</option>`).join('');
     const basisOpts = BASIS_VALUES.map(o => `<option value="${o.v}" ${en.Basis===o.v?'selected':''}>${escapeHtml(o.label)}</option>`).join('');
 
@@ -2175,7 +2184,7 @@
         <h3>${isNew?'Add Enemy':'Edit Enemy'}</h3>
         <label>Name<input type="text" data-f="Name" value="${escapeAttr(en.Name)}" placeholder="e.g. Jiangshi 殭屍"></label>
         <div class="modal-row">
-          <label>Map<select data-f="Map">${mapOpts}</select></label>
+          <label>Map<select data-f="Map">${orphanOpt}${mapOpts}</select></label>
           <label>Tier<select data-f="Tier">${tierOpts}</select></label>
         </div>
         <div class="modal-row">
