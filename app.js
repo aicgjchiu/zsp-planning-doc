@@ -443,6 +443,20 @@
     { v:'Not started', label:'Not started' },
     { v:'Design',      label:'Design' },
   ];
+  const GP_SECTIONS = [
+    { v:'Pacing',  label:'Pacing' },
+    { v:'Combat',  label:'Combat' },
+    { v:'Economy', label:'Economy' },
+  ];
+  const BASIS_OPTS = [
+    { v:'target',   label:'target — designer-proposed' },
+    { v:'as-built', label:'as-built — verified in UE 5.7' },
+  ];
+  const ENEMY_TIERS = [
+    { v:'trash', label:'Trash' },
+    { v:'elite', label:'Elite' },
+    { v:'boss',  label:'Boss' },
+  ];
   const ROLE_KEYS = [
     { v:'programmer', label:'Programmer' },
     { v:'char',       label:'Character Artist' },
@@ -467,6 +481,8 @@
   let milestonesState  = [];       // array of Milestone objects
   let timelineState    = { TotalYears: 3 }; // singleton; sheet row merged over this default
   let quarterPlanState = [];       // array of QuarterPlan objects
+  let enemiesState     = [];       // array of Enemy objects
+  let gameplayState    = [];       // array of Gameplay parameter objects
   let userName        = '';        // cached identity
   let syncStatus      = 'idle';
   let lastSyncAt      = null;
@@ -502,6 +518,8 @@
       milestonesState  = (json.milestones  || []).map(normalizeMilestoneRow);
       timelineState    = normalizeTimelineRow(json.timeline);
       quarterPlanState = (json.quarterPlan || []).map(normalizeQuarterPlanRow);
+      enemiesState     = (json.enemies    || []).map(normalizeEnemyRow);
+      gameplayState    = (json.gameplay   || []).map(normalizeGameplayRow);
       lastSyncAt = new Date();
       setSyncStatus('ok');
       const anyEmpty =
@@ -576,6 +594,16 @@
       const patch = Object.assign({}, fields, stamp);
       if(i >= 0) systemsState[i] = Object.assign({}, systemsState[i], patch);
       else       systemsState.push(Object.assign({ Id: key, CreatedAt: nowIso }, patch));
+    } else if(tab === 'Enemies'){
+      const i = enemiesState.findIndex(x => x.Id === key);
+      const patch = Object.assign({}, fields, stamp);
+      if(i >= 0) enemiesState[i] = Object.assign({}, enemiesState[i], patch);
+      else       enemiesState.push(Object.assign({ Id: key, CreatedAt: nowIso }, patch));
+    } else if(tab === 'Gameplay'){
+      const i = gameplayState.findIndex(x => x.Id === key);
+      const patch = Object.assign({}, fields, stamp);
+      if(i >= 0) gameplayState[i] = Object.assign({}, gameplayState[i], patch);
+      else       gameplayState.push(Object.assign({ Id: key, CreatedAt: nowIso }, patch));
     } else if(tab === 'GanttTracks'){
       const i = ganttTracksState.findIndex(x => x.TrackId === key);
       const patch = Object.assign({}, fields, stamp);
@@ -618,6 +646,8 @@
       tab === 'Items'       ? { arr: itemsState,       idField: 'Id'          } :
       tab === 'Maps'        ? { arr: mapsState,        idField: 'Id'          } :
       tab === 'Systems'     ? { arr: systemsState,     idField: 'Id'          } :
+      tab === 'Enemies'     ? { arr: enemiesState,     idField: 'Id'          } :
+      tab === 'Gameplay'    ? { arr: gameplayState,    idField: 'Id'          } :
       tab === 'GanttTracks' ? { arr: ganttTracksState, idField: 'TrackId'     } :
       tab === 'GanttBars'   ? { arr: ganttBarsState,   idField: 'BarId'       } :
       tab === 'Milestones'  ? { arr: milestonesState,  idField: 'MilestoneId' } :
@@ -831,6 +861,42 @@
       CreatedAt:      String(r.CreatedAt || ''),
       UpdatedAt:      String(r.UpdatedAt || ''),
       UpdatedBy:      String(r.UpdatedBy || ''),
+    };
+  }
+  function normalizeEnemyRow(r){
+    return {
+      Id:          String(r.Id || ''),
+      Name:        String(r.Name || ''),
+      Map:         String(r.Map || ''),
+      Tier:        String(r.Tier || 'trash'),
+      HP:          r.HP != null ? String(r.HP) : '',
+      Damage:      String(r.Damage || ''),
+      MoveSpeed:   r.MoveSpeed != null ? String(r.MoveSpeed) : '',
+      SpawnWeight: r.SpawnWeight != null ? String(r.SpawnWeight) : '',
+      Behavior:    String(r.Behavior || ''),
+      Basis:       String(r.Basis || 'target'),
+      Hidden:      r.Hidden === true || r.Hidden === 'TRUE' || r.Hidden === 'true',
+      SortOrder:   Number(r.SortOrder) || 0,
+      CreatedAt:   String(r.CreatedAt || ''),
+      UpdatedAt:   String(r.UpdatedAt || ''),
+      UpdatedBy:   String(r.UpdatedBy || ''),
+    };
+  }
+  function normalizeGameplayRow(r){
+    return {
+      Id:        String(r.Id || ''),
+      Section:   String(r.Section || 'Pacing'),
+      Name:      String(r.Name || ''),
+      // r.Value can legitimately be 0 (e.g. Spiria natural regen) — don't use `|| ''`.
+      Value:     r.Value != null ? String(r.Value) : '',
+      Unit:      String(r.Unit || ''),
+      Basis:     String(r.Basis || 'target'),
+      Notes:     String(r.Notes || ''),
+      Hidden:    r.Hidden === true || r.Hidden === 'TRUE' || r.Hidden === 'true',
+      SortOrder: Number(r.SortOrder) || 0,
+      CreatedAt: String(r.CreatedAt || ''),
+      UpdatedAt: String(r.UpdatedAt || ''),
+      UpdatedBy: String(r.UpdatedBy || ''),
     };
   }
 
