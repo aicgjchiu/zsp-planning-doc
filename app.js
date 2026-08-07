@@ -547,10 +547,6 @@
     });
   }
 
-  // Replaced with real implementations in the modals task
-  function openGameplayModal(id){ alert('Gameplay modal not built yet.'); }
-  function openEnemyModal(id){ alert('Enemy modal not built yet.'); }
-
   // --- Task Board · Google Sheets backed ---
   const SHEET_ENDPOINT = 'https://script.google.com/macros/s/AKfycbypjQj-_CrxjEovmHt5vzc0Iaysbwt3n0MglkG7MAsDMJII8B8YCqFOBM6eE4GKAFuc/exec';
   const POLL_MS = 30000;
@@ -2077,6 +2073,166 @@
             closeModal();
             const p = pushRow('Systems', s.Id, { Hidden: true });
             renderSystems();
+            p.then(fetchIfIdle);
+          });
+        });
+      }
+    });
+  }
+
+  function openGameplayModal(id){
+    const isNew = !id;
+    const g = isNew
+      ? { Id:'', Section:'Pacing', Name:'', Value:'', Unit:'', Basis:'target', Notes:'', Hidden:false, SortOrder:0 }
+      : gameplayState.find(x => x.Id === id);
+    if(!g){ alert('Parameter not found.'); return; }
+
+    const secOpts   = GP_SECTIONS.map(o => `<option value="${o.v}" ${g.Section===o.v?'selected':''}>${escapeHtml(o.label)}</option>`).join('');
+    const basisOpts = BASIS_VALUES.map(o => `<option value="${o.v}" ${g.Basis===o.v?'selected':''}>${escapeHtml(o.label)}</option>`).join('');
+
+    const html = `
+      <div class="modal-panel" data-panel>
+        <h3>${isNew?'Add Parameter':'Edit Parameter'}</h3>
+        <label>Name<input type="text" data-f="Name" value="${escapeAttr(g.Name)}" placeholder="e.g. Portal hop cooldown"></label>
+        <div class="modal-row">
+          <label>Section<select data-f="Section">${secOpts}</select></label>
+          <label>Basis<select data-f="Basis">${basisOpts}</select></label>
+        </div>
+        <div class="modal-row">
+          <label>Value<input type="text" data-f="Value" value="${escapeAttr(g.Value)}" placeholder="e.g. 300 or 8/16/30/60"></label>
+          <label>Unit<input type="text" data-f="Unit" value="${escapeAttr(g.Unit)}" placeholder="e.g. s, ratio, dmg"></label>
+        </div>
+        <label>Notes<textarea data-f="Notes">${escapeHtml(g.Notes)}</textarea></label>
+        <div class="modal-footer">
+          ${isNew ? '' : '<button class="modal-btn danger" data-action="delete">Delete</button>'}
+          <div class="right">
+            <button class="modal-btn" data-action="cancel">Cancel</button>
+            <button class="modal-btn primary" data-action="save">${isNew?'Create':'Save'}</button>
+          </div>
+        </div>
+      </div>
+    `;
+    openModal(html, (root) => {
+      const panel = qs('[data-panel]', root);
+      qs('[data-action="cancel"]', panel).addEventListener('click', closeModal);
+      qs('[data-action="save"]', panel).addEventListener('click', async () => {
+        const fields = {};
+        qsa('[data-f]', panel).forEach(el => { fields[el.getAttribute('data-f')] = el.value; });
+        if(!fields.Name || !String(fields.Name).trim()){
+          alert('Parameter name is required.');
+          return;
+        }
+        const key = isNew ? genId('gp') : g.Id;
+        if(isNew){
+          const maxSo = gameplayState.reduce((m,x) => Math.max(m, x.SortOrder), 0);
+          fields.SortOrder = maxSo + 1000;
+          fields.Hidden = false;
+        }
+        closeModal();
+        const p = pushRow('Gameplay', key, fields);
+        renderGameplay();
+        p.then(fetchIfIdle);
+      });
+      if(!isNew){
+        qs('[data-action="delete"]', panel).addEventListener('click', () => {
+          const footer = qs('.modal-footer', panel);
+          footer.innerHTML = `
+            <div class="modal-confirm-inline">
+              Hide this parameter? Recoverable from the sheet.
+              <button class="modal-btn danger" data-action="confirm-delete">Yes, hide</button>
+              <button class="modal-btn" data-action="cancel-delete">No</button>
+            </div>
+          `;
+          qs('[data-action="cancel-delete"]', footer).addEventListener('click', closeModal);
+          qs('[data-action="confirm-delete"]', footer).addEventListener('click', () => {
+            closeModal();
+            const p = pushRow('Gameplay', g.Id, { Hidden: true });
+            renderGameplay();
+            p.then(fetchIfIdle);
+          });
+        });
+      }
+    });
+  }
+
+  function openEnemyModal(id){
+    const isNew = !id;
+    const en = isNew
+      ? { Id:'', Name:'', Map:(mapsState[0] && mapsState[0].Id) || '', Tier:'trash', HP:'', Damage:'', MoveSpeed:'', SpawnWeight:'', Behavior:'', Basis:'target', Hidden:false, SortOrder:0 }
+      : enemiesState.find(x => x.Id === id);
+    if(!en){ alert('Enemy not found.'); return; }
+
+    const mapOpts = mapsState
+      .filter(m => !m.Hidden)
+      .slice()
+      .sort((a,b) => a.SortOrder - b.SortOrder)
+      .map(m => `<option value="${escapeAttr(m.Id)}" ${en.Map===m.Id?'selected':''}>${escapeHtml(m.Name)}</option>`).join('');
+    const tierOpts  = ENEMY_TIERS.map(o => `<option value="${o.v}" ${en.Tier===o.v?'selected':''}>${escapeHtml(o.label)}</option>`).join('');
+    const basisOpts = BASIS_VALUES.map(o => `<option value="${o.v}" ${en.Basis===o.v?'selected':''}>${escapeHtml(o.label)}</option>`).join('');
+
+    const html = `
+      <div class="modal-panel" data-panel>
+        <h3>${isNew?'Add Enemy':'Edit Enemy'}</h3>
+        <label>Name<input type="text" data-f="Name" value="${escapeAttr(en.Name)}" placeholder="e.g. Jiangshi 殭屍"></label>
+        <div class="modal-row">
+          <label>Map<select data-f="Map">${mapOpts}</select></label>
+          <label>Tier<select data-f="Tier">${tierOpts}</select></label>
+        </div>
+        <div class="modal-row">
+          <label>HP<input type="text" data-f="HP" value="${escapeAttr(en.HP)}"></label>
+          <label>Damage<input type="text" data-f="Damage" value="${escapeAttr(en.Damage)}" placeholder="e.g. 25/hit"></label>
+        </div>
+        <div class="modal-row">
+          <label>Move speed<input type="text" data-f="MoveSpeed" value="${escapeAttr(en.MoveSpeed)}"></label>
+          <label>Spawn weight<input type="text" data-f="SpawnWeight" value="${escapeAttr(en.SpawnWeight)}" placeholder="blank for bosses"></label>
+        </div>
+        <label>Basis<select data-f="Basis">${basisOpts}</select></label>
+        <label>Behavior<textarea data-f="Behavior">${escapeHtml(en.Behavior)}</textarea></label>
+        <div class="modal-footer">
+          ${isNew ? '' : '<button class="modal-btn danger" data-action="delete">Delete</button>'}
+          <div class="right">
+            <button class="modal-btn" data-action="cancel">Cancel</button>
+            <button class="modal-btn primary" data-action="save">${isNew?'Create':'Save'}</button>
+          </div>
+        </div>
+      </div>
+    `;
+    openModal(html, (root) => {
+      const panel = qs('[data-panel]', root);
+      qs('[data-action="cancel"]', panel).addEventListener('click', closeModal);
+      qs('[data-action="save"]', panel).addEventListener('click', async () => {
+        const fields = {};
+        qsa('[data-f]', panel).forEach(el => { fields[el.getAttribute('data-f')] = el.value; });
+        if(!fields.Name || !String(fields.Name).trim()){
+          alert('Enemy name is required.');
+          return;
+        }
+        const key = isNew ? genId('en') : en.Id;
+        if(isNew){
+          const maxSo = enemiesState.reduce((m,x) => Math.max(m, x.SortOrder), 0);
+          fields.SortOrder = maxSo + 1000;
+          fields.Hidden = false;
+        }
+        closeModal();
+        const p = pushRow('Enemies', key, fields);
+        renderEnemies();
+        p.then(fetchIfIdle);
+      });
+      if(!isNew){
+        qs('[data-action="delete"]', panel).addEventListener('click', () => {
+          const footer = qs('.modal-footer', panel);
+          footer.innerHTML = `
+            <div class="modal-confirm-inline">
+              Hide this enemy? Recoverable from the sheet.
+              <button class="modal-btn danger" data-action="confirm-delete">Yes, hide</button>
+              <button class="modal-btn" data-action="cancel-delete">No</button>
+            </div>
+          `;
+          qs('[data-action="cancel-delete"]', footer).addEventListener('click', closeModal);
+          qs('[data-action="confirm-delete"]', footer).addEventListener('click', () => {
+            closeModal();
+            const p = pushRow('Enemies', en.Id, { Hidden: true });
+            renderEnemies();
             p.then(fetchIfIdle);
           });
         });
