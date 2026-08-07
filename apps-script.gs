@@ -16,6 +16,8 @@ const GANTT_BARS_SHEET   = 'GanttBars';
 const MILESTONES_SHEET   = 'Milestones';
 const TIMELINE_SHEET     = 'Timeline';
 const QUARTER_PLAN_SHEET = 'QuarterPlan';
+const ENEMIES_SHEET      = 'Enemies';
+const GAMEPLAY_SHEET     = 'Gameplay';
 const CONFIG_SHEET       = 'Config'; // private — NEVER returned in GET
 
 function doGet(e) {
@@ -33,6 +35,8 @@ function doGet(e) {
     milestones:   readTab(ss.getSheetByName(MILESTONES_SHEET)),
     timeline:     (readTab(ss.getSheetByName(TIMELINE_SHEET))[0] || null),
     quarterPlan:   readTab(ss.getSheetByName(QUARTER_PLAN_SHEET)),
+    enemies:      readTab(ss.getSheetByName(ENEMIES_SHEET)),
+    gameplay:     readTab(ss.getSheetByName(GAMEPLAY_SHEET)),
   });
 }
 
@@ -41,6 +45,7 @@ function doPost(e) {
     const body = JSON.parse(e.postData.contents);
     if (body.Action === 'bootstrap') return handleBootstrap(body);
     if (body.Action === 'unlock')    return handleUnlock(body);
+    if (body.Action === 'ensuretabs') return handleEnsureTabs();
     return handleUpsert(body);
   } catch (err) {
     return jsonOut({ ok: false, error: String(err) });
@@ -64,6 +69,28 @@ function handleUnlock(body) {
   }
   if (expected == null) return jsonOut({ ok: false, error: 'password row missing in Config' });
   return jsonOut({ ok: true, unlocked: submitted === expected });
+}
+
+// Creates the fixed set of newer tabs (with header rows) if they don't exist.
+// Idempotent — safe to call repeatedly. Only known tabs can be created.
+function handleEnsureTabs() {
+  const specs = {
+    'Enemies':  ['Id','Name','Map','Tier','HP','Damage','MoveSpeed','SpawnWeight','Behavior','Basis','Hidden','SortOrder','CreatedAt','UpdatedAt','UpdatedBy'],
+    'Gameplay': ['Id','Section','Name','Value','Unit','Basis','Notes','Hidden','SortOrder','CreatedAt','UpdatedAt','UpdatedBy'],
+  };
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const created = {};
+  Object.keys(specs).forEach(name => {
+    let sheet = ss.getSheetByName(name);
+    if (!sheet) {
+      sheet = ss.insertSheet(name);
+      sheet.getRange(1, 1, 1, specs[name].length).setValues([specs[name]]);
+      created[name] = true;
+    } else {
+      created[name] = false;
+    }
+  });
+  return jsonOut({ ok: true, created: created });
 }
 
 function handleUpsert(body) {
