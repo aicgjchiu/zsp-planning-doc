@@ -538,6 +538,8 @@ git commit -m "Gameplay & Numbers: banner model + param/enemy renderers"
 
 ### Task 5: Edit modals — `app.js`
 
+> **As-built note:** the code below was superseded by commit `e18195f` (orphan Map/Section preservation: `visMaps` hoisting, `orphanOpt`/`secOrphan` synthesized options). Do not re-paste this block verbatim — `app.js` is the source of truth.
+
 **Files:**
 - Modify: `app.js` (replace the two stubs from Task 4 Step 5; place after `openSystemModal` ~line 1862)
 
