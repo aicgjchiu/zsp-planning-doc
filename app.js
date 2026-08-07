@@ -448,7 +448,7 @@
     { v:'Combat',  label:'Combat' },
     { v:'Economy', label:'Economy' },
   ];
-  const BASIS_OPTS = [
+  const BASIS_VALUES = [
     { v:'target',   label:'target — designer-proposed' },
     { v:'as-built', label:'as-built — verified in UE 5.7' },
   ];
@@ -863,18 +863,24 @@
       UpdatedBy:      String(r.UpdatedBy || ''),
     };
   }
+  // Basis/Tier drive strict === checks in renderers (chip color, boss-row style).
+  // Rows written via curl or hand-edited in the sheet can carry casing/whitespace
+  // variants — clamp to the canonical domain instead of trusting the cell.
+  function clampBasis(v){ return String(v || '').trim().toLowerCase() === 'as-built' ? 'as-built' : 'target'; }
+  function clampTier(v){ const t = String(v || '').trim().toLowerCase(); return (t === 'elite' || t === 'boss') ? t : 'trash'; }
   function normalizeEnemyRow(r){
     return {
       Id:          String(r.Id || ''),
       Name:        String(r.Name || ''),
       Map:         String(r.Map || ''),
-      Tier:        String(r.Tier || 'trash'),
+      Tier:        clampTier(r.Tier),
+      // numeric cells arrive as numbers; 0 must survive (see normalizeGameplayRow.Value)
       HP:          r.HP != null ? String(r.HP) : '',
-      Damage:      String(r.Damage || ''),
+      Damage:      r.Damage != null ? String(r.Damage) : '',
       MoveSpeed:   r.MoveSpeed != null ? String(r.MoveSpeed) : '',
       SpawnWeight: r.SpawnWeight != null ? String(r.SpawnWeight) : '',
       Behavior:    String(r.Behavior || ''),
-      Basis:       String(r.Basis || 'target'),
+      Basis:       clampBasis(r.Basis),
       Hidden:      r.Hidden === true || r.Hidden === 'TRUE' || r.Hidden === 'true',
       SortOrder:   Number(r.SortOrder) || 0,
       CreatedAt:   String(r.CreatedAt || ''),
@@ -890,7 +896,7 @@
       // r.Value can legitimately be 0 (e.g. Spiria natural regen) — don't use `|| ''`.
       Value:     r.Value != null ? String(r.Value) : '',
       Unit:      String(r.Unit || ''),
-      Basis:     String(r.Basis || 'target'),
+      Basis:     clampBasis(r.Basis),
       Notes:     String(r.Notes || ''),
       Hidden:    r.Hidden === true || r.Hidden === 'TRUE' || r.Hidden === 'true',
       SortOrder: Number(r.SortOrder) || 0,
@@ -1073,6 +1079,7 @@
   function escapeHtml(s){
     return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   }
+  function labelOf(list, v){ const o = list.find(x => x.v === v); return o ? o.label : v; }
 
   function renderAll(){
     renderGantt();
