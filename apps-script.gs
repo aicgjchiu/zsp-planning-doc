@@ -45,7 +45,7 @@ function doPost(e) {
     const body = JSON.parse(e.postData.contents);
     if (body.Action === 'bootstrap') return handleBootstrap(body);
     if (body.Action === 'unlock')    return handleUnlock(body);
-    if (body.Action === 'ensuretabs')return handleEnsureTabs();
+    if (body.Action === 'ensuretabs') return handleEnsureTabs();
     return handleUpsert(body);
   } catch (err) {
     return jsonOut({ ok: false, error: String(err) });
