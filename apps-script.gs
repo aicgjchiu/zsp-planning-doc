@@ -45,7 +45,7 @@ function doPost(e) {
     const body = JSON.parse(e.postData.contents);
     if (body.Action === 'bootstrap') return handleBootstrap(body);
     if (body.Action === 'unlock')    return handleUnlock(body);
-    if (body.Action === 'ensuretabs') return handleEnsureTabs();
+    if (body.Action === 'ensuretabs')return handleEnsureTabs();
     return handleUpsert(body);
   } catch (err) {
     return jsonOut({ ok: false, error: String(err) });
@@ -75,20 +75,17 @@ function handleUnlock(body) {
 // Idempotent — safe to call repeatedly. Only known tabs can be created.
 function handleEnsureTabs() {
   const specs = {
-    'Enemies':  ['Id','Name','Map','Tier','HP','Damage','MoveSpeed','SpawnWeight','Behavior','Basis','Hidden','SortOrder','CreatedAt','UpdatedAt','UpdatedBy'],
-    'Gameplay': ['Id','Section','Name','Value','Unit','Basis','Notes','Hidden','SortOrder','CreatedAt','UpdatedAt','UpdatedBy'],
+    [ENEMIES_SHEET]:  ['Id','Name','Map','Tier','HP','Damage','MoveSpeed','SpawnWeight','Behavior','Basis','Hidden','SortOrder','CreatedAt','UpdatedAt','UpdatedBy'],
+    [GAMEPLAY_SHEET]: ['Id','Section','Name','Value','Unit','Basis','Notes','Hidden','SortOrder','CreatedAt','UpdatedAt','UpdatedBy'],
   };
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const created = {};
   Object.keys(specs).forEach(name => {
     let sheet = ss.getSheetByName(name);
-    if (!sheet) {
-      sheet = ss.insertSheet(name);
-      sheet.getRange(1, 1, 1, specs[name].length).setValues([specs[name]]);
-      created[name] = true;
-    } else {
-      created[name] = false;
-    }
+    const isNew = !sheet;
+    if (isNew) sheet = ss.insertSheet(name, ss.getNumSheets());
+    if (sheet.getLastRow() === 0) sheet.getRange(1, 1, 1, specs[name].length).setValues([specs[name]]);
+    created[name] = isNew;
   });
   return jsonOut({ ok: true, created: created });
 }
