@@ -710,6 +710,7 @@ Delete the two stub functions, then after `openSystemModal`, insert:
 - [ ] **Step 2: Syntax + browser check**
 
 Run: `node --check app.js` — expected exit 0.
+Also run: `grep -n "not built yet" app.js` — must return nothing (both Task 4 stubs removed; duplicate function declarations resolve silently, so a forgotten stub produces no error anywhere).
 Browser (`http://localhost:8000/`, Design Doc tab): click ＋ on Gameplay & Numbers → modal opens with Section/Basis selects → Cancel closes. Same for Enemies ＋. No console errors. (Don't save — writes go to the production sheet; the write path is exercised during seeding.)
 
 - [ ] **Step 3: Commit**
