@@ -129,7 +129,7 @@ After the `SYS_STATUSES` const (`app.js:440-445`), insert:
     { v:'Combat',  label:'Combat' },
     { v:'Economy', label:'Economy' },
   ];
-  const BASIS_OPTS = [
+  const BASIS_VALUES = [
     { v:'target',   label:'target — designer-proposed' },
     { v:'as-built', label:'as-built — verified in UE 5.7' },
   ];
@@ -453,7 +453,7 @@ After `renderSystems` (ends ~line 408), insert:
     const emit = en => html.push(`
       <tr class="${en.Tier === 'boss' ? 'boss-row ' : ''}${en._pending ? 'pending' : ''}">
         <td><b>${escapeHtml(en.Name)}</b></td>
-        <td class="dim">${escapeHtml(en.Tier)}</td>
+        <td class="dim">${escapeHtml(labelOf(ENEMY_TIERS, en.Tier))}</td>
         <td class="num">${escapeHtml(en.HP)}</td>
         <td>${escapeHtml(en.Damage)}</td>
         <td class="num">${escapeHtml(en.MoveSpeed)}</td>
@@ -554,7 +554,7 @@ Delete the two stub functions, then after `openSystemModal`, insert:
     if(!g){ alert('Parameter not found.'); return; }
 
     const secOpts   = GP_SECTIONS.map(o => `<option value="${o.v}" ${g.Section===o.v?'selected':''}>${escapeHtml(o.label)}</option>`).join('');
-    const basisOpts = BASIS_OPTS.map(o => `<option value="${o.v}" ${g.Basis===o.v?'selected':''}>${escapeHtml(o.label)}</option>`).join('');
+    const basisOpts = BASIS_VALUES.map(o => `<option value="${o.v}" ${g.Basis===o.v?'selected':''}>${escapeHtml(o.label)}</option>`).join('');
 
     const html = `
       <div class="modal-panel" data-panel>
@@ -634,7 +634,7 @@ Delete the two stub functions, then after `openSystemModal`, insert:
       .sort((a,b) => a.SortOrder - b.SortOrder)
       .map(m => `<option value="${escapeAttr(m.Id)}" ${en.Map===m.Id?'selected':''}>${escapeHtml(m.Name)}</option>`).join('');
     const tierOpts  = ENEMY_TIERS.map(o => `<option value="${o.v}" ${en.Tier===o.v?'selected':''}>${escapeHtml(o.label)}</option>`).join('');
-    const basisOpts = BASIS_OPTS.map(o => `<option value="${o.v}" ${en.Basis===o.v?'selected':''}>${escapeHtml(o.label)}</option>`).join('');
+    const basisOpts = BASIS_VALUES.map(o => `<option value="${o.v}" ${en.Basis===o.v?'selected':''}>${escapeHtml(o.label)}</option>`).join('');
 
     const html = `
       <div class="modal-panel" data-panel>
