@@ -804,7 +804,7 @@ def push(tab, key, fields):
         sys.exit('FAILED on %s/%s' % (tab, key))
 
 for i, (id_, name, tier, hp, dmg, spd, wt, basis, beh) in enumerate(ENEMIES):
-    push('Enemies', id_, {'Name': name, 'Tier': tier, 'HP': hp, 'Damage': dmg,
+    push('Enemies', id_, {'Name': name, 'Map': 'hamlet', 'Tier': tier, 'HP': hp, 'Damage': dmg,
                           'MoveSpeed': spd, 'SpawnWeight': wt, 'Basis': basis,
                           'Behavior': beh, 'Hidden': False, 'SortOrder': (i+1)*1000})
 
