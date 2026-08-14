@@ -1003,6 +1003,10 @@ Summarize to the user: live URL, what changed, the banner numbers, and that the 
 
 ---
 
+### Task 11 (amendment 2026-08-07): Source column
+
+Per the spec amendment. One implementer commit covering: `app.js` (normalizers gain `Source: String(r.Source || '')`; renderGameplay/renderEnemies emit a `<td class="src">` between Basis and Notes/Behavior; colspans 5→6 and 8→9, two sites each; both modals gain a Source text input + `Source:''` in the isNew defaults), `index.html` (`<th style="width:170px">Source</th>` in both theads at the matching position), `styles.css` (append `table.sheet td.src{font-family:var(--mono);font-size:11px;color:var(--ink-3);word-break:break-all}`), `apps-script.gs` mirror (`'Source'` after `'Basis'` in both ensuretabs specs + header-repair block appending missing spec'd headers to existing tabs — deploy optional/lazy), CLAUDE.md (both header bullets gain `Source`). Then: user types `Source` into `Enemies!P1` and `Gameplay!M1`; seed Source values via curl once the game-session mapping arrives; verify via GET + live site.
+
 ## Plan Self-Review (completed)
 
 - **Spec coverage:** schema (T1/T7), backend + deploy (T1), frontend renderers/banner/modals (T2–T5), placement + renumbering (T3), content seed (T7), Characters/Items/Systems sync (T8), CLAUDE.md (T9). Banner caption + as-built anchors in T4 Step 1. ✓

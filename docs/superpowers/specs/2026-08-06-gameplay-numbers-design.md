@@ -111,6 +111,14 @@ As-built numbers land in the tabs that already own them:
 - **Items:** Throwing Dagger → 15 dmg, range 5000, stack 10, `Existing=TRUE`; Spiria Potion → +25 Spiria, stack 5, `Existing=TRUE`. Other items keep design values with `Existing=FALSE`.
 - **Systems notes refresh (as-built drift):** "Vote-upgrade" — actual flow is enemy 4-card vote (5s vote + 3s reveal) → player draft 3-pick (15s) → 質變 pick (15s), triggered by the team SP bar, not per-portal soul thresholds; "Enemy Portal" — add tier ladder (300s/tier, 0–7) and 1 damage taken = 1 soul fed to the active portal.
 
+## Amendment (2026-08-07): Source column — value provenance
+
+User request: every number in the section should say **where it lives in the game project**, so tuning starts at the right file.
+
+- **Schema:** both `Enemies` and `Gameplay` gain a `Source` column (free text: file/asset path `·` property, e.g. `DT_EnemyDefinitions · HP`). For existing tabs the header cell is appended manually at the end (`Enemies!P1`, `Gameplay!M1`) — `handleUpsert`/`readTab` are header-name-driven, so column position is irrelevant. `handleEnsureTabs` specs add `Source` (canonical position after `Basis` for fresh creation) and gain a header-repair step (appends spec'd headers missing from an existing tab); deploying that ride-along is optional and can wait for the next natural deploy.
+- **UI:** `Source` renders as a mono 11px dim column between Basis and Notes (gameplay) / Basis and Behavior (enemies), `word-break:break-all` for long paths; both edit modals gain a Source text input. Group-row colspans bump 5→6 and 8→9.
+- **Content:** values requested from the「遊戲設計文檔更新」session (per-row mapping, 2026-08-07). `target` rows that exist nowhere in code get `—(design doc only)`; derived TTK rows likewise. Seeded via the documented curl recipe once the reply lands.
+
 ## Rollout order (no data loss)
 
 1. Create the two sheet tabs with header rows (manual or via one-off Apps Script run).
