@@ -119,6 +119,10 @@ User request: every number in the section should say **where it lives in the gam
 - **UI:** `Source` renders as a mono 11px dim column between Basis and Notes (gameplay) / Basis and Behavior (enemies), `word-break:break-all` for long paths; both edit modals gain a Source text input. Group-row colspans bump 5→6 and 8→9.
 - **Content:** values requested from the「遊戲設計文檔更新」session (per-row mapping, 2026-08-07). `target` rows that exist nowhere in code get `—(design doc only)`; derived TTK rows likewise. Seeded via the documented curl recipe once the reply lands.
 
+## Amendment (2026-08-07b): comprehensive tunables registry
+
+User request: every gameplay number that will ever be fine-tuned belongs in the table — upgrade cards called out as the flagship gap. The game session swept ZSP 5.7 end-to-end (`Saved/design-doc-sync/tunables-inventory.md`, §A–M) and the table grew from 22 to **104 rows** across **8 sections**: the original Pacing/Combat/Economy (expanded) plus new `Player`, `Abilities`, `Draft Cards` (14), `質變 Cards` (10 incl. threshold), `Vote Cards` (18). All new rows are `as-built` with full `Source` provenance; hardcoded C++ values are marked "recompile to change". `GP_SECTIONS` in `app.js` gained the five sections. Data-fidelity review before seeding caught two sign-flipped card values (Quick Burn / Quick Discharge — `FireCooldownReduction +0.3` is a reduction attribute, not a negative value) and an unverified Tier-folder inference. Known quirk: Sheets' `appendRow` coerces plus-prefixed numerics (`+0.3` → `0.3`) even on text-formatted cells; the update path (`setValue`) preserves them, so prefixes were restored with a second pass.
+
 ## Rollout order (no data loss)
 
 1. Create the two sheet tabs with header rows (manual or via one-off Apps Script run).
