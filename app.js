@@ -479,18 +479,19 @@
         <td class="num mono-cell">${escapeHtml(g.Value)}</td>
         <td class="dim">${escapeHtml(g.Unit)}</td>
         <td>${basisChip(g.Basis)}</td>
+        <td class="src">${escapeHtml(g.Source)}</td>
         <td class="dim">${escapeHtml(g.Notes)} <button class="row-menu-btn" data-gp-id="${escapeAttr(g.Id)}" ${canEdit?'':'disabled title="Set your name first"'}>⋯</button></td>
       </tr>`);
     GP_SECTIONS.forEach(sec => {
       const group = rows.filter(g => g.Section === sec.v);
       if(!group.length) return;
-      html.push(`<tr class="group-row"><td colspan="5">${escapeHtml(sec.label)}</td></tr>`);
+      html.push(`<tr class="group-row"><td colspan="6">${escapeHtml(sec.label)}</td></tr>`);
       group.forEach(emit);
     });
     const known = new Set(GP_SECTIONS.map(s => s.v));
     const other = rows.filter(g => !known.has(g.Section));
     if(other.length){
-      html.push('<tr class="group-row"><td colspan="5">Other</td></tr>');
+      html.push('<tr class="group-row"><td colspan="6">Other</td></tr>');
       other.forEach(emit);
     }
     host.innerHTML = html.join('');
@@ -524,18 +525,19 @@
         <td class="num">${escapeHtml(en.MoveSpeed)}</td>
         <td class="num">${escapeHtml(en.SpawnWeight) || '—'}</td>
         <td>${basisChip(en.Basis)}</td>
+        <td class="src">${escapeHtml(en.Source)}</td>
         <td class="dim">${escapeHtml(en.Behavior)} <button class="row-menu-btn" data-enemy-id="${escapeAttr(en.Id)}" ${canEdit?'':'disabled title="Set your name first"'}>⋯</button></td>
       </tr>`);
     maps.forEach(m => {
       const group = rows.filter(en => en.Map === m.Id);
       if(!group.length) return;
-      html.push(`<tr class="group-row"><td colspan="8">${escapeHtml(m.Name)}</td></tr>`);
+      html.push(`<tr class="group-row"><td colspan="9">${escapeHtml(m.Name)}</td></tr>`);
       group.forEach(emit);
     });
     const mapIds = new Set(maps.map(m => m.Id));
     const orphans = rows.filter(en => !mapIds.has(en.Map));
     if(orphans.length){
-      html.push('<tr class="group-row"><td colspan="8">Unassigned map</td></tr>');
+      html.push('<tr class="group-row"><td colspan="9">Unassigned map</td></tr>');
       orphans.forEach(emit);
     }
     host.innerHTML = html.join('');
@@ -1023,6 +1025,7 @@
       SpawnWeight: r.SpawnWeight != null ? String(r.SpawnWeight) : '',
       Behavior:    String(r.Behavior || ''),
       Basis:       clampBasis(r.Basis),
+      Source:      String(r.Source || ''),
       Hidden:      r.Hidden === true || r.Hidden === 'TRUE' || r.Hidden === 'true',
       SortOrder:   Number(r.SortOrder) || 0,
       CreatedAt:   String(r.CreatedAt || ''),
@@ -1039,6 +1042,7 @@
       Value:     r.Value != null ? String(r.Value) : '',
       Unit:      String(r.Unit || ''),
       Basis:     clampBasis(r.Basis),
+      Source:    String(r.Source || ''),
       Notes:     String(r.Notes || ''),
       Hidden:    r.Hidden === true || r.Hidden === 'TRUE' || r.Hidden === 'true',
       SortOrder: Number(r.SortOrder) || 0,
@@ -2083,7 +2087,7 @@
   function openGameplayModal(id){
     const isNew = !id;
     const g = isNew
-      ? { Id:'', Section:'Pacing', Name:'', Value:'', Unit:'', Basis:'target', Notes:'', Hidden:false, SortOrder:0 }
+      ? { Id:'', Section:'Pacing', Name:'', Value:'', Unit:'', Basis:'target', Source:'', Notes:'', Hidden:false, SortOrder:0 }
       : gameplayState.find(x => x.Id === id);
     if(!g){ alert('Parameter not found.'); return; }
 
@@ -2106,6 +2110,7 @@
           <label>Value<input type="text" data-f="Value" value="${escapeAttr(g.Value)}" placeholder="e.g. 300 or 8/16/30/60"></label>
           <label>Unit<input type="text" data-f="Unit" value="${escapeAttr(g.Unit)}" placeholder="e.g. s, ratio, dmg"></label>
         </div>
+        <label>Source (file / asset · property)<input type="text" data-f="Source" value="${escapeAttr(g.Source)}" placeholder="e.g. AZSPEnemyPortal · TierUpSeconds — blank for design-only"></label>
         <label>Notes<textarea data-f="Notes">${escapeHtml(g.Notes)}</textarea></label>
         <div class="modal-footer">
           ${isNew ? '' : '<button class="modal-btn danger" data-action="delete">Delete</button>'}
@@ -2166,7 +2171,7 @@
       .slice()
       .sort((a,b) => a.SortOrder - b.SortOrder);
     const en = isNew
-      ? { Id:'', Name:'', Map:(visMaps[0] && visMaps[0].Id) || '', Tier:'trash', HP:'', Damage:'', MoveSpeed:'', SpawnWeight:'', Behavior:'', Basis:'target', Hidden:false, SortOrder:0 }
+      ? { Id:'', Name:'', Map:(visMaps[0] && visMaps[0].Id) || '', Tier:'trash', HP:'', Damage:'', MoveSpeed:'', SpawnWeight:'', Behavior:'', Basis:'target', Source:'', Hidden:false, SortOrder:0 }
       : enemiesState.find(x => x.Id === id);
     if(!en){ alert('Enemy not found.'); return; }
 
@@ -2196,6 +2201,7 @@
           <label>Spawn weight<input type="text" data-f="SpawnWeight" value="${escapeAttr(en.SpawnWeight)}" placeholder="blank for bosses"></label>
         </div>
         <label>Basis<select data-f="Basis">${basisOpts}</select></label>
+        <label>Source (file / asset · property)<input type="text" data-f="Source" value="${escapeAttr(en.Source)}" placeholder="e.g. DT_EnemyDefinitions · HP — blank for design-only"></label>
         <label>Behavior<textarea data-f="Behavior">${escapeHtml(en.Behavior)}</textarea></label>
         <div class="modal-footer">
           ${isNew ? '' : '<button class="modal-btn danger" data-action="delete">Delete</button>'}

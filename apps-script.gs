@@ -75,8 +75,8 @@ function handleUnlock(body) {
 // Idempotent — safe to call repeatedly. Only known tabs can be created.
 function handleEnsureTabs() {
   const specs = {
-    [ENEMIES_SHEET]:  ['Id','Name','Map','Tier','HP','Damage','MoveSpeed','SpawnWeight','Behavior','Basis','Hidden','SortOrder','CreatedAt','UpdatedAt','UpdatedBy'],
-    [GAMEPLAY_SHEET]: ['Id','Section','Name','Value','Unit','Basis','Notes','Hidden','SortOrder','CreatedAt','UpdatedAt','UpdatedBy'],
+    [ENEMIES_SHEET]:  ['Id','Name','Map','Tier','HP','Damage','MoveSpeed','SpawnWeight','Behavior','Basis','Source','Hidden','SortOrder','CreatedAt','UpdatedAt','UpdatedBy'],
+    [GAMEPLAY_SHEET]: ['Id','Section','Name','Value','Unit','Basis','Source','Notes','Hidden','SortOrder','CreatedAt','UpdatedAt','UpdatedBy'],
   };
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const created = {};
@@ -86,6 +86,15 @@ function handleEnsureTabs() {
     if (isNew) sheet = ss.insertSheet(name, ss.getNumSheets());
     if (isNew) sheet.getRange(1, 1, sheet.getMaxRows(), specs[name].length).setNumberFormat('@');
     if (sheet.getLastRow() === 0) sheet.getRange(1, 1, 1, specs[name].length).setValues([specs[name]]);
+    // Header repair: append spec'd headers missing from an existing tab (new columns land at the end).
+    if (!isNew) {
+      const have = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0].map(String);
+      const missing = specs[name].filter(h => have.indexOf(h) < 0);
+      if (missing.length) {
+        sheet.getRange(1, have.length + 1, 1, missing.length).setValues([missing]);
+        sheet.getRange(1, have.length + 1, sheet.getMaxRows(), missing.length).setNumberFormat('@');
+      }
+    }
     created[name] = isNew;
   });
   return jsonOut({ ok: true, created: created });
