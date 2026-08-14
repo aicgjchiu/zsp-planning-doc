@@ -586,9 +586,14 @@
     { v:'Design',      label:'Design' },
   ];
   const GP_SECTIONS = [
-    { v:'Pacing',  label:'Pacing' },
-    { v:'Combat',  label:'Combat' },
-    { v:'Economy', label:'Economy' },
+    { v:'Pacing',      label:'Pacing' },
+    { v:'Combat',      label:'Combat' },
+    { v:'Economy',     label:'Economy' },
+    { v:'Player',      label:'Player' },
+    { v:'Abilities',   label:'Abilities' },
+    { v:'Draft Cards', label:'Draft Cards' },
+    { v:'質變 Cards',   label:'質變 Cards' },
+    { v:'Vote Cards',  label:'Vote Cards' },
   ];
   const BASIS_VALUES = [
     { v:'target',   label:'target — designer-proposed' },
