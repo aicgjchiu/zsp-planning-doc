@@ -132,7 +132,11 @@ function handleUpsert(body) {
       if (fields[h] != null) return fields[h];
       return '';
     });
-    sheet.appendRow(row);
+    // setValues, not appendRow: appendRow re-parses inputs, so leading-"+" text
+    // becomes a formula #ERROR! and numeric strings become numbers even on
+    // @-formatted cells. setValues stores raw values (only a leading "=" would
+    // still be treated as a formula).
+    sheet.getRange(sheet.getLastRow() + 1, 1, 1, row.length).setValues([row]);
   } else {
     headers.forEach((h, i) => {
       if (h === 'UpdatedAt') { sheet.getRange(rowIdx, i + 1).setValue(now); return; }
