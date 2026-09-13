@@ -2192,7 +2192,7 @@
     const html = `
       <div class="modal-panel" data-panel>
         <h3>${isNew?'Add Enemy':'Edit Enemy'}</h3>
-        <label>Name<input type="text" data-f="Name" value="${escapeAttr(en.Name)}" placeholder="e.g. Jiangshi 殭屍"></label>
+        <label>Name<input type="text" data-f="Name" value="${escapeAttr(en.Name)}" placeholder="e.g. Jiangshi · 殭屍"></label>
         <div class="modal-row">
           <label>Map<select data-f="Map">${orphanOpt}${mapOpts}</select></label>
           <label>Tier<select data-f="Tier">${tierOpts}</select></label>
