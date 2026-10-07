@@ -38,6 +38,7 @@
     <button data-target="overview">Overview</button>
     <button data-target="roadmap">Roadmap</button>
     <button data-target="design">Design Doc</button>
+    <button data-target="cards">Cards</button>
     <button data-target="tasks">Task Board</button>
   </nav>
   <div class="meta">v0.1 · 3-year plan · 1 prog + 3 artists</div>
@@ -281,6 +282,35 @@
         <p class="small mt-4"><b>Proposal:</b> Meme-y item names/SFX, goofy enemy death animations, emotes. Commit to tone in VFX + audio direction.</p>
       </div>
     </div>
+  </div>
+</main>
+
+<!-- =================== CARDS =================== -->
+<main class="page wide hidden" data-tab="cards">
+  <div class="page-header">
+    <div class="kicker">Card Library · 卡片庫</div>
+    <h1>Cards — draft · 質變 · ultimate · enemy</h1>
+    <p>Every card in one place: what is already in the game, what the team agreed to build, and new ideas waiting for review. Add a card, edit it, flip its status — the sheet is the source of truth and everyone sees the change within 30 s. In-game text is English; the Chinese column is the design record.</p>
+  </div>
+  <div class="cards-summary" id="cards-summary"></div>
+  <div id="cards-controls"></div>
+  <div class="small" id="cards-count" style="margin:6px 2px 10px;color:var(--ink-3)"></div>
+  <div class="table-wrap">
+    <table class="sheet cards-table" id="cards-table">
+      <thead><tr>
+        <th style="width:150px">Status</th>
+        <th style="width:240px">Card</th>
+        <th style="width:84px">Kind</th>
+        <th style="width:130px">Bonds</th>
+        <th style="width:150px">Rarity</th>
+        <th>Effect</th>
+        <th style="width:140px">Updated</th>
+      </tr></thead>
+      <tbody></tbody>
+    </table>
+  </div>
+  <div class="note">
+    <b>Status flow.</b> 💡 Brainstorm (anyone can add one; the team reviews it) → ✅ 確定要做 (agreed) → 🔧 實作中 (Jeff is on it) → 🎮 已實裝 (in the game). ✖ 不做 keeps a rejected idea as history instead of deleting it. A 💡 card shows a <b>NEW</b> chip for two weeks so nobody misses it. When implementing, filter ✅ 確定要做 — that is the to-build list.
   </div>
 </main>
 

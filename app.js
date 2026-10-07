@@ -630,6 +630,7 @@
   let quarterPlanState = [];       // array of QuarterPlan objects
   let enemiesState     = [];       // array of Enemy objects
   let gameplayState    = [];       // array of Gameplay parameter objects
+  let cardsState       = [];       // array of Card objects (Cards tab — the card library)
   let userName        = '';        // cached identity
   let syncStatus      = 'idle';
   let lastSyncAt      = null;
@@ -667,6 +668,7 @@
       quarterPlanState = (json.quarterPlan || []).map(normalizeQuarterPlanRow);
       enemiesState     = (json.enemies    || []).map(normalizeEnemyRow);
       gameplayState    = (json.gameplay   || []).map(normalizeGameplayRow);
+      cardsState       = (json.cards      || []).map(normalizeCardRow);
       lastSyncAt = new Date();
       setSyncStatus('ok');
       const anyEmpty =
@@ -683,6 +685,7 @@
       renderSystems();
       renderGameplay();
       renderEnemies();
+      renderCardsPage();
       renderGantt();
       renderMilestones();
       renderQuarterPlan();
@@ -696,6 +699,7 @@
           renderBoard();
           renderGantt();
           renderMilestones();
+          renderCardsPage();
         }
       }
     }catch(err){
@@ -753,6 +757,11 @@
       const patch = Object.assign({}, fields, stamp);
       if(i >= 0) gameplayState[i] = Object.assign({}, gameplayState[i], patch);
       else       gameplayState.push(Object.assign({ Id: key, CreatedAt: nowIso }, patch));
+    } else if(tab === 'Cards'){
+      const i = cardsState.findIndex(x => x.Id === key);
+      const patch = Object.assign({}, fields, stamp);
+      if(i >= 0) cardsState[i] = Object.assign({}, cardsState[i], patch);
+      else       cardsState.push(normalizeCardRow(Object.assign({ Id: key, CreatedAt: nowIso }, patch)));
     } else if(tab === 'GanttTracks'){
       const i = ganttTracksState.findIndex(x => x.TrackId === key);
       const patch = Object.assign({}, fields, stamp);
@@ -797,6 +806,7 @@
       tab === 'Systems'     ? { arr: systemsState,     idField: 'Id'          } :
       tab === 'Enemies'     ? { arr: enemiesState,     idField: 'Id'          } :
       tab === 'Gameplay'    ? { arr: gameplayState,    idField: 'Id'          } :
+      tab === 'Cards'       ? { arr: cardsState,       idField: 'Id'          } :
       tab === 'GanttTracks' ? { arr: ganttTracksState, idField: 'TrackId'     } :
       tab === 'GanttBars'   ? { arr: ganttBarsState,   idField: 'BarId'       } :
       tab === 'Milestones'  ? { arr: milestonesState,  idField: 'MilestoneId' } :
@@ -1244,6 +1254,7 @@
     renderSystems();
     renderGameplay();
     renderEnemies();
+    renderCardsPage();
     mountSectionAddButtons();
     renderBoard();
     renderLegend();
@@ -1280,6 +1291,7 @@
           renderBoard();
           renderGantt();
           renderMilestones();
+          renderCardsPage();
         }
       });
     }
@@ -2526,6 +2538,336 @@
             closeModal();
             const p = pushRow('Items', it.Id, { Hidden: true });
             renderItems();
+            p.then(fetchIfIdle);
+          });
+        });
+      }
+    });
+  }
+
+  // ===================== Cards · card library (Cards sheet tab) =====================
+  // Every card in the game or on the drawing board, one row each. Sheet headers:
+  // Id | Name | NameZh | Kind | Bonds | Rarity | Stacking | Effect | EffectZh | Notes | Status | Asset | Hidden | SortOrder | CreatedAt | UpdatedAt | UpdatedBy
+  const CARD_KINDS = [
+    { v:'draft',    label:'Draft card · 抽卡',        short:'抽卡' },
+    { v:'quantum',  label:'質變 · Evolution',         short:'質變' },
+    { v:'ultimate', label:'Ultimate card · 大招卡',   short:'大招卡' },
+    { v:'enemy',    label:'Enemy vote card · 敵方卡', short:'敵方' },
+  ];
+  const CARD_STATUSES = [
+    { v:'idea',     label:'💡 Brainstorm · 待 review', short:'💡 待 review', hint:'New or still being discussed — the team reviews it, then decides' },
+    { v:'approved', label:'✅ 確定要做 · Approved',    short:'✅ 確定要做',  hint:'Reviewed and agreed; waiting for implementation' },
+    { v:'building', label:'🔧 實作中 · Building',      short:'🔧 實作中',    hint:'Being implemented right now' },
+    { v:'done',     label:'🎮 已實裝 · In game',       short:'🎮 已實裝',    hint:'Already in the game' },
+    { v:'cut',      label:'✖ 不做 · Cut',             short:'✖ 不做',      hint:'Decided against; kept as history' },
+  ];
+  const CARD_RARITIES = [
+    { v:'',       label:'— n/a' },
+    { v:'silver', label:'Silver · 銀' },
+    { v:'gold',   label:'Gold · 金' },
+    { v:'jade',   label:'Jade · 玉' },
+  ];
+  const CARD_STACKINGS = [
+    { v:'',      label:'— n/a' },
+    { v:'stack', label:'Repeatable · 可疊' },
+    { v:'once',  label:'One-time · 一次性' },
+  ];
+  const CARD_BOND_SUGGESTIONS = ['火','雷','陣','劍','亡靈','神射','符法','守護','同袍','靈能','殺戮','控場','生死','修行','通用','敵方'];
+  const CARDS_FILTER_KEY = 'zsp_cards_filters';
+  const CARD_NEW_DAYS = 14;
+  let cardsFilter = { q:'', kind:'all', status:'all', bond:'all', group:'status' };
+  try{
+    const saved = JSON.parse(localStorage.getItem(CARDS_FILTER_KEY) || 'null');
+    if(saved && typeof saved === 'object') cardsFilter = Object.assign(cardsFilter, saved);
+  }catch(e){}
+  function saveCardsFilter(){ try{ localStorage.setItem(CARDS_FILTER_KEY, JSON.stringify(cardsFilter)); }catch(e){} }
+
+  function clampCardKind(v){ const k = String(v || '').trim().toLowerCase(); return CARD_KINDS.some(o => o.v === k) ? k : 'draft'; }
+  function clampCardStatus(v){ const s = String(v || '').trim().toLowerCase(); return CARD_STATUSES.some(o => o.v === s) ? s : 'idea'; }
+  function clampCardRarity(v){ const r = String(v || '').trim().toLowerCase(); return (r === 'silver' || r === 'gold' || r === 'jade') ? r : ''; }
+  function clampCardStacking(v){ const s = String(v || '').trim().toLowerCase(); return (s === 'stack' || s === 'once') ? s : ''; }
+  function normalizeCardRow(r){
+    return {
+      Id:        String(r.Id || ''),
+      Name:      String(r.Name || ''),
+      NameZh:    String(r.NameZh || ''),
+      Kind:      clampCardKind(r.Kind),
+      Bonds:     String(r.Bonds || ''),
+      Rarity:    clampCardRarity(r.Rarity),
+      Stacking:  clampCardStacking(r.Stacking),
+      Effect:    String(r.Effect || ''),
+      EffectZh:  String(r.EffectZh || ''),
+      Notes:     String(r.Notes || ''),
+      Status:    clampCardStatus(r.Status),
+      Asset:     String(r.Asset || ''),
+      Hidden:    r.Hidden === true || r.Hidden === 'TRUE' || r.Hidden === 'true',
+      SortOrder: Number(r.SortOrder) || 0,
+      CreatedAt: String(r.CreatedAt || ''),
+      UpdatedAt: String(r.UpdatedAt || ''),
+      UpdatedBy: String(r.UpdatedBy || ''),
+    };
+  }
+  function cardBonds(c){
+    return String(c.Bonds || '').split(/[,，、/／·・]/).map(s => s.trim()).filter(Boolean);
+  }
+  function cardIsNew(c){
+    if(c.Status !== 'idea') return false;
+    const d = new Date(c.CreatedAt);
+    if(isNaN(d.getTime())) return false;
+    return (Date.now() - d.getTime()) < CARD_NEW_DAYS * 86400 * 1000;
+  }
+  function cardDisplayName(c){
+    return c.NameZh ? `${c.Name} · ${c.NameZh}` : c.Name;
+  }
+  function cardMatchesFilter(c){
+    if(cardsFilter.kind !== 'all' && c.Kind !== cardsFilter.kind) return false;
+    if(cardsFilter.status !== 'all' && c.Status !== cardsFilter.status) return false;
+    if(cardsFilter.bond !== 'all' && !cardBonds(c).includes(cardsFilter.bond)) return false;
+    const q = String(cardsFilter.q || '').trim().toLowerCase();
+    if(q){
+      const hay = [c.Name, c.NameZh, c.Effect, c.EffectZh, c.Bonds, c.Notes, c.Asset].join(' ').toLowerCase();
+      if(!hay.includes(q)) return false;
+    }
+    return true;
+  }
+  function allCardBonds(){
+    const set = new Set(CARD_BOND_SUGGESTIONS);
+    cardsState.filter(c => !c.Hidden).forEach(c => cardBonds(c).forEach(b => set.add(b)));
+    return [...set];
+  }
+
+  // Controls render ONCE (the search box must keep focus while typing); the
+  // summary + table re-render on every data or filter change.
+  let cardsControlsMounted = false;
+  function renderCardsControls(){
+    const host = qs('#cards-controls');
+    if(!host || cardsControlsMounted) return;
+    cardsControlsMounted = true;
+    const kindBtns = [{ v:'all', short:'All kinds' }].concat(CARD_KINDS)
+      .map(k => `<button data-cards-kind="${k.v}">${escapeHtml(k.short)}</button>`).join('');
+    const groupBtns = [{ v:'status', label:'by Status' }, { v:'kind', label:'by Kind' }]
+      .map(g => `<button data-cards-group="${g.v}">${g.label}</button>`).join('');
+    host.innerHTML = `
+      <div class="cards-row">
+        <input type="search" id="cards-search" placeholder="Search name / 中文 / effect / bond…" value="${escapeAttr(cardsFilter.q || '')}">
+        <select id="cards-bond"></select>
+        <div class="cards-filter" id="cards-kind-filter">${kindBtns}</div>
+        <div class="cards-filter" id="cards-group-filter"><span class="small" style="padding:0 4px">Group</span>${groupBtns}</div>
+        <button class="cards-add" id="cards-add-btn">＋ Add card · 新增卡片</button>
+      </div>`;
+    qs('#cards-search', host).addEventListener('input', e => { cardsFilter.q = e.target.value; saveCardsFilter(); renderCardsTable(); });
+    qs('#cards-bond', host).addEventListener('change', e => { cardsFilter.bond = e.target.value; saveCardsFilter(); renderCardsTable(); });
+    qsa('[data-cards-kind]', host).forEach(b => b.addEventListener('click', () => {
+      cardsFilter.kind = b.getAttribute('data-cards-kind'); saveCardsFilter(); renderCardsTable();
+    }));
+    qsa('[data-cards-group]', host).forEach(b => b.addEventListener('click', () => {
+      cardsFilter.group = b.getAttribute('data-cards-group'); saveCardsFilter(); renderCardsTable();
+    }));
+    qs('#cards-add-btn', host).addEventListener('click', () => {
+      if(!userName){ alert('Set your name first (Task Board → "Change name").'); return; }
+      openCardModal(null);
+    });
+  }
+  function syncCardsControls(){
+    const host = qs('#cards-controls');
+    if(!host) return;
+    const bondSel = qs('#cards-bond', host);
+    if(bondSel){
+      const opts = ['<option value="all">All bonds · 全部羈絆</option>']
+        .concat(allCardBonds().map(b => `<option value="${escapeAttr(b)}" ${cardsFilter.bond===b?'selected':''}>${escapeHtml(b)}</option>`));
+      bondSel.innerHTML = opts.join('');
+      if(!allCardBonds().includes(cardsFilter.bond)) { cardsFilter.bond = 'all'; bondSel.value = 'all'; }
+    }
+    qsa('[data-cards-kind]', host).forEach(b => b.classList.toggle('active', b.getAttribute('data-cards-kind') === cardsFilter.kind));
+    qsa('[data-cards-group]', host).forEach(b => b.classList.toggle('active', b.getAttribute('data-cards-group') === cardsFilter.group));
+    const addBtn = qs('#cards-add-btn', host);
+    if(addBtn){ addBtn.disabled = !userName; addBtn.title = userName ? 'Add a card' : 'Set your name first'; }
+  }
+
+  function renderCardsSummary(){
+    const host = qs('#cards-summary');
+    if(!host) return;
+    const visible = cardsState.filter(c => !c.Hidden);
+    const counts = {};
+    CARD_STATUSES.forEach(s => counts[s.v] = 0);
+    visible.forEach(c => { counts[c.Status] = (counts[c.Status] || 0) + 1; });
+    const newCount = visible.filter(cardIsNew).length;
+    host.innerHTML = `
+      <button class="cards-sum ${cardsFilter.status==='all'?'active':''}" data-cards-status="all"><b>${visible.length}</b> cards · all</button>
+      ${CARD_STATUSES.map(s => `<button class="cards-sum st-${s.v} ${cardsFilter.status===s.v?'active':''}" data-cards-status="${s.v}" title="${escapeAttr(s.hint)}"><b>${counts[s.v] || 0}</b> ${escapeHtml(s.short)}</button>`).join('')}
+      ${newCount ? `<span class="chip new">NEW · ${newCount} to review</span>` : ''}`;
+    qsa('[data-cards-status]', host).forEach(b => b.addEventListener('click', () => {
+      cardsFilter.status = b.getAttribute('data-cards-status'); saveCardsFilter(); renderCardsPage();
+    }));
+  }
+
+  const CARD_KIND_ORDER = { draft:0, quantum:1, ultimate:2, enemy:3 };
+  function cardSort(a, b){
+    const k = (CARD_KIND_ORDER[a.Kind] || 0) - (CARD_KIND_ORDER[b.Kind] || 0);
+    if(k) return k;
+    const so = (a.SortOrder || 0) - (b.SortOrder || 0);
+    if(so) return so;
+    return String(a.Name).localeCompare(String(b.Name));
+  }
+  function rarityChip(c){
+    if(!c.Rarity) return '';
+    const label = c.Rarity === 'silver' ? 'Silver · 銀' : c.Rarity === 'gold' ? 'Gold · 金' : 'Jade · 玉';
+    return `<span class="chip rar-${c.Rarity}">${label}</span>`;
+  }
+  function stackChip(c){
+    if(!c.Stacking) return '';
+    return `<span class="chip stk">${c.Stacking === 'once' ? 'one-time' : 'repeatable'}</span>`;
+  }
+  function renderCardsTable(){
+    syncCardsControls();
+    const host = qs('#cards-table tbody');
+    if(!host) return;
+    const canEdit = !!userName;
+    const rows = cardsState.filter(c => !c.Hidden && cardMatchesFilter(c)).slice().sort(cardSort);
+    const emit = c => {
+      const bonds = cardBonds(c).map(b => `<span class="chip bond">${escapeHtml(b)}</span>`).join(' ');
+      const kind = CARD_KINDS.find(k => k.v === c.Kind) || CARD_KINDS[0];
+      const statusOpts = CARD_STATUSES.map(s => `<option value="${s.v}" ${c.Status===s.v?'selected':''}>${escapeHtml(s.short)}</option>`).join('');
+      const upAt = c.UpdatedAt ? formatTimeAgo(c.UpdatedAt) : '';
+      return `
+        <tr class="card-row st-${c.Status}${c._pending ? ' pending' : ''}" data-card-id="${escapeAttr(c.Id)}">
+          <td>
+            <select class="card-status-select st-${c.Status}" data-card-id="${escapeAttr(c.Id)}" ${canEdit?'':'disabled title="Set your name first"'}>${statusOpts}</select>
+            ${cardIsNew(c) ? '<span class="chip new">NEW</span>' : ''}
+          </td>
+          <td><b>${escapeHtml(c.Name)}</b>${c.NameZh ? ' · ' + escapeHtml(c.NameZh) : ''}${c.Asset ? `<div class="small mono-cell" style="color:var(--ink-3)">${escapeHtml(c.Asset)}</div>` : ''}</td>
+          <td><span class="chip kind-${c.Kind}">${escapeHtml(kind.short)}</span></td>
+          <td>${bonds || '<span class="dim">—</span>'}</td>
+          <td>${rarityChip(c)} ${stackChip(c)}</td>
+          <td>${escapeHtml(c.Effect)}${c.EffectZh ? `<div class="dim">${escapeHtml(c.EffectZh)}</div>` : ''}${c.Notes ? `<div class="small" style="margin-top:4px">${escapeHtml(c.Notes)}</div>` : ''}</td>
+          <td class="dim"><div class="small">${escapeHtml(c.UpdatedBy || '')}${upAt ? ' · ' + upAt : ''}</div><button class="row-menu-btn" data-card-id="${escapeAttr(c.Id)}" ${canEdit?'':'disabled title="Set your name first"'}>⋯</button></td>
+        </tr>`;
+    };
+    const html = [];
+    if(!rows.length){
+      const total = cardsState.filter(c => !c.Hidden).length;
+      html.push(`<tr><td colspan="7" class="dim" style="padding:18px">${total ? 'No cards match these filters.' : 'No cards yet — the Cards sheet tab is empty (or not enabled on the backend yet).'}</td></tr>`);
+    } else if(cardsFilter.group === 'kind'){
+      CARD_KINDS.forEach(k => {
+        const group = rows.filter(c => c.Kind === k.v);
+        if(!group.length) return;
+        html.push(`<tr class="group-row"><td colspan="7">${escapeHtml(k.label)} · ${group.length}</td></tr>`);
+        group.forEach(c => html.push(emit(c)));
+      });
+    } else {
+      CARD_STATUSES.forEach(s => {
+        const group = rows.filter(c => c.Status === s.v);
+        if(!group.length) return;
+        html.push(`<tr class="group-row st-${s.v}"><td colspan="7">${escapeHtml(s.label)} · ${group.length}</td></tr>`);
+        group.forEach(c => html.push(emit(c)));
+      });
+    }
+    host.innerHTML = html.join('');
+    const countEl = qs('#cards-count');
+    if(countEl) countEl.textContent = `${rows.length} shown · ${cardsState.filter(c => !c.Hidden).length} total`;
+
+    qsa('.card-status-select', host).forEach(sel => {
+      sel.addEventListener('change', () => {
+        const id = sel.getAttribute('data-card-id');
+        const v = sel.value;
+        const tr = sel.closest('tr');
+        if(tr){ tr.classList.add('pending'); }
+        pushRow('Cards', id, { Status: v }).then(() => { renderCardsPage(); fetchIfIdle(); });
+        renderCardsSummary();
+      });
+    });
+    qsa('.row-menu-btn', host).forEach(btn => {
+      btn.addEventListener('click', () => {
+        if(btn.disabled) return;
+        openCardModal(btn.getAttribute('data-card-id'));
+      });
+    });
+  }
+  function renderCardsPage(){
+    renderCardsControls();
+    renderCardsSummary();
+    renderCardsTable();
+  }
+
+  function openCardModal(id){
+    const isNew = !id;
+    const c = isNew
+      ? { Id:'', Name:'', NameZh:'', Kind:(cardsFilter.kind !== 'all' ? cardsFilter.kind : 'draft'), Bonds:'', Rarity:'', Stacking:'', Effect:'', EffectZh:'', Notes:'', Status:'idea', Asset:'', Hidden:false, SortOrder:0 }
+      : cardsState.find(x => x.Id === id);
+    if(!c){ alert('Card not found.'); return; }
+
+    const opt = (list, cur) => list.map(o => `<option value="${escapeAttr(o.v)}" ${cur===o.v?'selected':''}>${escapeHtml(o.label)}</option>`).join('');
+    const bondList = allCardBonds().map(b => `<option value="${escapeAttr(b)}">`).join('');
+    const html = `
+      <div class="modal-panel" data-panel style="max-width:720px">
+        <h3>${isNew ? 'Add card · 新增卡片' : 'Edit card · 編輯卡片'}</h3>
+        <div class="modal-row">
+          <label>Name (English, in-game text)<input type="text" data-f="Name" value="${escapeAttr(c.Name)}" placeholder="e.g. Empower Souls"></label>
+          <label>名稱（中文）<input type="text" data-f="NameZh" value="${escapeAttr(c.NameZh)}" placeholder="例：壯魂"></label>
+        </div>
+        <div class="modal-row">
+          <label>Kind · 種類<select data-f="Kind">${opt(CARD_KINDS, c.Kind)}</select></label>
+          <label>Status · 狀態<select data-f="Status">${opt(CARD_STATUSES, c.Status)}</select></label>
+        </div>
+        <div class="modal-row">
+          <label>Bonds · 羈絆／家族（逗號分隔）<input type="text" data-f="Bonds" list="card-bonds-list" value="${escapeAttr(c.Bonds)}" placeholder="e.g. 火, 雷"><datalist id="card-bonds-list">${bondList}</datalist></label>
+          <label>Rarity · 稀有度<select data-f="Rarity">${opt(CARD_RARITIES, c.Rarity)}</select></label>
+        </div>
+        <div class="modal-row">
+          <label>Stacking · 可疊／一次性<select data-f="Stacking">${opt(CARD_STACKINGS, c.Stacking)}</select></label>
+          <label>Asset · 遊戲內資產（實裝後填）<input type="text" data-f="Asset" value="${escapeAttr(c.Asset)}" placeholder="e.g. DA_PlayerCard_Power"></label>
+        </div>
+        <label>Effect (English)<textarea data-f="Effect" placeholder="What the card does, player-facing wording">${escapeHtml(c.Effect)}</textarea></label>
+        <label>效果（中文）<textarea data-f="EffectZh" placeholder="中文說明、數值、疊法">${escapeHtml(c.EffectZh)}</textarea></label>
+        <label>Notes · 備註（來源、討論、實作提醒）<textarea data-f="Notes">${escapeHtml(c.Notes)}</textarea></label>
+        <div class="modal-footer">
+          ${isNew ? '' : '<button class="modal-btn danger" data-action="delete">Delete</button>'}
+          <div class="right">
+            <button class="modal-btn" data-action="cancel">Cancel</button>
+            <button class="modal-btn primary" data-action="save">${isNew ? 'Create' : 'Save'}</button>
+          </div>
+        </div>
+      </div>
+    `;
+    openModal(html, (root) => {
+      const panel = qs('[data-panel]', root);
+      qs('[data-action="cancel"]', panel).addEventListener('click', closeModal);
+      qs('[data-action="save"]', panel).addEventListener('click', async () => {
+        const fields = {};
+        qsa('[data-f]', panel).forEach(el => { fields[el.getAttribute('data-f')] = el.value; });
+        fields.Name = String(fields.Name || '').trim();
+        fields.NameZh = String(fields.NameZh || '').trim();
+        if(!fields.Name && !fields.NameZh){
+          alert('Give the card a name (English or 中文).');
+          return;
+        }
+        if(!fields.Name) fields.Name = fields.NameZh;
+        const key = isNew ? genId('card') : c.Id;
+        if(isNew){
+          const maxSo = cardsState.reduce((m,x) => Math.max(m, x.SortOrder), 0);
+          fields.SortOrder = maxSo + 1000;
+          fields.Hidden = false;
+        }
+        closeModal();
+        const p = pushRow('Cards', key, fields);
+        renderCardsPage();
+        p.then(fetchIfIdle);
+      });
+      if(!isNew){
+        qs('[data-action="delete"]', panel).addEventListener('click', () => {
+          const footer = qs('.modal-footer', panel);
+          footer.innerHTML = `
+            <div class="modal-confirm-inline">
+              Hide this card? Recoverable from the sheet.
+              <button class="modal-btn danger" data-action="confirm-delete">Yes, hide</button>
+              <button class="modal-btn" data-action="cancel-delete">No</button>
+            </div>
+          `;
+          qs('[data-action="cancel-delete"]', footer).addEventListener('click', closeModal);
+          qs('[data-action="confirm-delete"]', footer).addEventListener('click', () => {
+            closeModal();
+            const p = pushRow('Cards', c.Id, { Hidden: true });
+            renderCardsPage();
             p.then(fetchIfIdle);
           });
         });

@@ -18,6 +18,7 @@ const TIMELINE_SHEET     = 'Timeline';
 const QUARTER_PLAN_SHEET = 'QuarterPlan';
 const ENEMIES_SHEET      = 'Enemies';
 const GAMEPLAY_SHEET     = 'Gameplay';
+const CARDS_SHEET        = 'Cards';    // card library (draft / 質變 / ultimate / enemy cards)
 const CONFIG_SHEET       = 'Config'; // private — NEVER returned in GET
 
 function doGet(e) {
@@ -37,6 +38,7 @@ function doGet(e) {
     quarterPlan:   readTab(ss.getSheetByName(QUARTER_PLAN_SHEET)),
     enemies:      readTab(ss.getSheetByName(ENEMIES_SHEET)),
     gameplay:     readTab(ss.getSheetByName(GAMEPLAY_SHEET)),
+    cards:        readTab(ss.getSheetByName(CARDS_SHEET)),
   });
 }
 
@@ -77,6 +79,7 @@ function handleEnsureTabs() {
   const specs = {
     [ENEMIES_SHEET]:  ['Id','Name','Map','Tier','HP','Damage','MoveSpeed','SpawnWeight','Behavior','Basis','Source','Hidden','SortOrder','CreatedAt','UpdatedAt','UpdatedBy'],
     [GAMEPLAY_SHEET]: ['Id','Section','Name','Value','Unit','Basis','Source','Notes','Hidden','SortOrder','CreatedAt','UpdatedAt','UpdatedBy'],
+    [CARDS_SHEET]:    ['Id','Name','NameZh','Kind','Bonds','Rarity','Stacking','Effect','EffectZh','Notes','Status','Asset','Hidden','SortOrder','CreatedAt','UpdatedAt','UpdatedBy'],
   };
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const created = {};
